@@ -36,3 +36,7 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+/.openai/
+/open-listing-studio/
+NovaCanvas-selfhosted-deploy.zip
+site-package.tar.gz

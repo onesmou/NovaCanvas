@@ -1,0 +1,17 @@
+.git
+.github
+.openai
+.next
+.vinext
+.wrangler
+node_modules
+.env
+.env.*
+!.env.example
+NovaCanvas-selfhosted-deploy.zip
+site-package.tar.gz
+open-listing-studio
+dist
+coverage
+npm-debug.log*
+
