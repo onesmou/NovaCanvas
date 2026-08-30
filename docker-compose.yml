@@ -8,6 +8,8 @@ services:
     ports:
       - "127.0.0.1:3001:3000"
     env_file: .env
+    volumes:
+      - assets_data:/app/data
     depends_on:
       db:
         condition: service_healthy
@@ -27,3 +29,4 @@ services:
       retries: 12
 volumes:
   postgres_data:
+  assets_data:

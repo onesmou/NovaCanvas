@@ -1,20 +1,10 @@
 import Link from 'next/link';
-import { requireChatGPTUser } from '../chatgpt-auth';
-export const dynamic = 'force-dynamic';
-
+import { requireAppUser } from '../../lib/selfhost-auth';
+import { db, ensureSelfHostedSchema } from '../../lib/selfhost-db';
+export const dynamic='force-dynamic';
 export default async function AccountPage(){
-  const user=await requireChatGPTUser('/account');
-  const initials=(user.fullName??user.email).slice(0,2).toUpperCase();
-  return <main className="auth-page"><section className="account-shell">
-    <aside className="account-nav"><div className="brand"><span className="brand-mark">N</span><span>NovaCanvas</span></div><Link className="active" href="/account">◎ 账号概览</Link><Link href="/">▦ Listing 项目</Link><a>▤ 团队成员</a><a>✦ 算力与套餐</a><a>⌘ 品牌资产</a><form action="/api/auth/logout" method="post"><button className="account-signout" type="submit">↗ 退出登录</button></form></aside>
-    <section className="account-main"><h1>账号与工作空间</h1><p>管理 Amazon 项目、团队权限、套餐和品牌资料。</p>
-      <div className="profile-banner"><i>{initials}</i><span><b>{user.displayName}</b><small>{user.email}</small></span><em>管理员</em></div>
-      <div className="account-grid">
-        <article className="account-card"><h2>JinYuu Amazon Team</h2><dl><div><dt>默认站点</dt><dd>Amazon US</dd></div><div><dt>团队成员</dt><dd>4 人</dd></div><div><dt>Listing 项目</dt><dd>28 个</dd></div><div><dt>本月生成</dt><dd>186 张</dd></div></dl></article>
-        <article className="account-card"><h2>当前套餐</h2><div className="plan"><div><strong>Pro</strong><p>2,400 算力 / 月<br/>5 个团队席位</p></div><button>管理套餐</button></div></article>
-        <article className="account-card"><h2>品牌资产</h2><dl><div><dt>品牌</dt><dd>NORTHPEAK</dd></div><div><dt>主色</dt><dd>#14213D</dd></div><div><dt>默认语言</dt><dd>English (US)</dd></div><div><dt>提示词模板</dt><dd>12 个</dd></div></dl></article>
-        <article className="account-card"><h2>安全与权限</h2><dl><div><dt>登录方式</dt><dd>ChatGPT 安全登录</dd></div><div><dt>账号角色</dt><dd>Owner</dd></div><div><dt>数据隔离</dt><dd>团队空间</dd></div><div><dt>最近登录</dt><dd>刚刚</dd></div></dl></article>
-      </div><Link className="back-link" href="/">← 返回 Amazon 套图工作台</Link>
-    </section>
-  </section></main>;
+  const user=await requireAppUser('/account');await ensureSelfHostedSchema();
+  const [stats]=await db()<Array<{projects:number;images:number;spent:number}>>`SELECT (SELECT count(*)::int FROM projects WHERE owner_id=${user.id}) AS projects,(SELECT count(*)::int FROM generated_assets WHERE owner_id=${user.id}) AS images,(SELECT coalesce(sum(credit_cost),0)::int FROM generated_assets WHERE owner_id=${user.id}) AS spent`;
+  const initials=(user.name||user.email).slice(0,2).toUpperCase();const role=user.role==='owner'?'所有者':user.role==='admin'?'管理员':'成员';
+  return <main className="auth-page"><section className="account-shell"><aside className="account-nav"><div className="brand"><span className="brand-mark">N</span><span>NovaCanvas</span></div><Link className="active" href="/account">◎ 账号概览</Link><Link href="/projects">▦ Listing 项目</Link><Link href="/">✦ 套图工作台</Link>{(user.role==='owner'||user.role==='admin')&&<Link href="/admin">⌘ 管理后台</Link>}<form action="/api/auth/logout" method="post"><button className="account-signout" type="submit">↗ 退出登录</button></form></aside><section className="account-main"><h1>账号与工作空间</h1><p>这里显示当前账号的真实项目、素材与算力数据。</p><div className="profile-banner"><i>{initials}</i><span><b>{user.name}</b><small>{user.email}</small></span><em>{role}</em></div><div className="account-grid"><article className="account-card"><h2>工作概览</h2><dl><div><dt>Listing 项目</dt><dd>{stats?.projects??0} 个</dd></div><div><dt>已生成素材</dt><dd>{stats?.images??0} 张</dd></div><div><dt>累计消耗</dt><dd>{stats?.spent??0} 点</dd></div><div><dt>当前角色</dt><dd>{role}</dd></div></dl></article><article className="account-card"><h2>可用算力</h2><div className="plan"><div><strong>{user.credits}</strong><p>当前剩余点数<br/>Nano Banana 6 点 / GPT Image 10 点</p></div><Link className="dark-button" href="/">开始作图</Link></div></article><article className="account-card"><h2>安全与数据</h2><dl><div><dt>登录方式</dt><dd>公司独立账号</dd></div><div><dt>会话保护</dt><dd>HttpOnly Cookie</dd></div><div><dt>素材存储</dt><dd>服务器私有卷</dd></div><div><dt>数据隔离</dt><dd>按账号授权</dd></div></dl></article><article className="account-card"><h2>快捷入口</h2><div className="quick-links"><Link href="/projects">查看全部项目</Link><Link href="/compliance">检查图片合规</Link><Link href="/a-plus">制作 A+ 内容</Link></div></article></div><Link className="back-link" href="/">← 返回 Amazon 套图工作台</Link></section></section></main>;
 }
