@@ -3,7 +3,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+# 路由从静态页改为鉴权动态页时，必须清掉上一层镜像残留的 Next 构建缓存。
+RUN rm -rf .next && npm run build
 
 FROM node:22-alpine
 WORKDIR /app
