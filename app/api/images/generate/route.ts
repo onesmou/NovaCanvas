@@ -11,6 +11,13 @@ type Provider='openai'|'gemini';
 type Body={provider?:Provider;prompt?:string;referenceImage?:string|null;size?:string;projectId?:string|null;projectTitle?:string;slot?:string;category?:string;market?:string;asin?:string};
 type Generated={base64:string;mimeType:string;model:string};
 
+function providerBaseUrl(envName:'OPENAI_BASE_URL'|'GEMINI_BASE_URL',fallback:string){
+  const raw=(process.env[envName]||fallback).trim().replace(/\/+$/,'');
+  let url:URL;try{url=new URL(raw);}catch{throw new Error(`${envName} 配置不是有效网址`);}
+  if(url.protocol!=='https:'&&url.protocol!=='http:')throw new Error(`${envName} 仅支持 HTTP 或 HTTPS`);
+  return raw;
+}
+
 function referenceParts(dataUrl:string){
   const match=/^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl);
   if(!match)throw new Error('商品参考图格式不支持，请上传 PNG、JPG 或 WEBP');
@@ -25,7 +32,8 @@ async function generateWithGemini(body:Body):Promise<Generated>{
   const model=process.env.GEMINI_IMAGE_MODEL||'gemini-3.1-flash-image';
   const input:Array<Record<string,string>>=[{type:'text',text:body.prompt!.trim()}];
   if(body.referenceImage){const image=referenceParts(body.referenceImage);input.push({type:'image',mime_type:image.mimeType,data:image.base64});}
-  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},signal:AbortSignal.timeout(280_000),body:JSON.stringify({model,input,response_format:{type:'image',aspect_ratio:aspectRatio(body.size),image_size:'1K'}})});
+  const baseUrl=providerBaseUrl('GEMINI_BASE_URL','https://generativelanguage.googleapis.com/v1beta');
+  const response=await fetch(`${baseUrl}/interactions`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},signal:AbortSignal.timeout(280_000),body:JSON.stringify({model,input,response_format:{type:'image',aspect_ratio:aspectRatio(body.size),image_size:'1K'}})});
   const data=await response.json() as {output_image?:{data?:string;mime_type?:string};error?:{message?:string}};
   if(!response.ok||!data.output_image?.data)throw new Error(data.error?.message||`Nano Banana 未返回图片（HTTP ${response.status}）`);
   return {base64:data.output_image.data,mimeType:data.output_image.mime_type||'image/png',model};
@@ -33,14 +41,15 @@ async function generateWithGemini(body:Body):Promise<Generated>{
 
 async function generateWithOpenAI(body:Body):Promise<Generated>{
   const key=process.env.OPENAI_API_KEY;if(!key)throw new Error('服务器尚未配置 GPT Image API 密钥，请联系管理员');
-  const model=process.env.OPENAI_IMAGE_MODEL||'gpt-image-2';let response:Response;
+  const model=process.env.OPENAI_IMAGE_MODEL||'gpt-image-2';
+  const baseUrl=providerBaseUrl('OPENAI_BASE_URL','https://api.openai.com/v1');let response:Response;
   if(body.referenceImage){
     const image=referenceParts(body.referenceImage);const form=new FormData();
     form.append('model',model);form.append('prompt',body.prompt!.trim());form.append('size',body.size||'1024x1024');form.append('quality','high');form.append('output_format','png');
     form.append('image[]',new Blob([Buffer.from(image.base64,'base64')],{type:image.mimeType}),'product-reference.png');
-    response=await fetch('https://api.openai.com/v1/images/edits',{method:'POST',headers:{Authorization:`Bearer ${key}`},body:form,signal:AbortSignal.timeout(280_000)});
+    response=await fetch(`${baseUrl}/images/edits`,{method:'POST',headers:{Authorization:`Bearer ${key}`},body:form,signal:AbortSignal.timeout(280_000)});
   }else{
-    response=await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},signal:AbortSignal.timeout(280_000),body:JSON.stringify({model,prompt:body.prompt!.trim(),size:body.size||'1024x1024',quality:'high',output_format:'png'})});
+    response=await fetch(`${baseUrl}/images/generations`,{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},signal:AbortSignal.timeout(280_000),body:JSON.stringify({model,prompt:body.prompt!.trim(),size:body.size||'1024x1024',quality:'high',output_format:'png'})});
   }
   const data=await response.json() as {data?:Array<{b64_json?:string}>;error?:{message?:string}};
   if(!response.ok||!data.data?.[0]?.b64_json)throw new Error(data.error?.message||`GPT Image 未返回图片（HTTP ${response.status}）`);
