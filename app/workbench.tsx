@@ -128,7 +128,7 @@ export default function Workbench({user}:{user:AppUser}) {
             <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} aria-label="Amazon 图片提示词" />
             <div className="prompt-chips">{['锁定商品外观','移动端可读','真实商业摄影','英文文案','高分辨率'].map(x=><button key={x} onClick={()=>setPrompt(v=>v+`，${x}`)}>+ {x}</button>)}</div>
             <div className="editor-footer"><div><span>✦ 基础规则提示</span><small>请仅填写真实、可证明的卖点；生成后仍需人工复核。</small></div><button className="magic" onClick={generate} disabled={tasks.some(task=>task.slot===selected.slot&&task.state==='generating')}>{tasks.some(task=>task.slot===selected.slot&&task.state==='generating')?'此图生成中…':'✦ 生成这一张'}</button></div>
-            {tasks.length>0&&<div className="generation-queue" aria-live="polite"><b>生成任务（最多同时 3 张）</b>{tasks.slice(0,5).map(task=><div key={task.id} className={`task-${task.state}`}><span>{task.slot}</span><p><strong>{task.title}</strong><small>{task.state==='generating'?'生成中，可继续选择其他图位':task.state==='complete'?'已保存到项目素材库':task.message||'生成失败'}</small></p>{task.imageUrl&&<a href={`${task.imageUrl}?download=1`}>下载</a>}</div>)}</div>}
+            {tasks.length>0&&<div className="generation-queue" aria-live="polite"><b>生成任务（最多同时 3 张）</b>{tasks.slice(0,5).map(task=><div key={task.id} className={`task-${task.state}`}><span>{task.slot}</span><p><strong>{task.title}</strong><small>{task.state==='generating'?'生成中，可继续选择其他图位':task.state==='complete'?'已保存到项目素材库':task.message||'生成失败'}</small></p>{task.imageUrl&&<><a href={`${task.imageUrl}?download=1`}>下载</a><Link href={`/editor/${task.imageUrl.split('/').pop()}`}>局部修改</Link></>}</div>)}</div>}
           </div>
         </section>
 
