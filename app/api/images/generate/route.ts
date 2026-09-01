@@ -22,7 +22,7 @@ function referenceParts(dataUrl:string){
   const match=/^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl);
   if(!match)throw new Error('商品参考图格式不支持，请上传 PNG、JPG 或 WEBP');
   const base64=match[2].replace(/\s/g,'');
-  if(Buffer.byteLength(base64,'base64')>20*1024*1024)throw new Error('商品参考图不能超过 20MB');
+  if(Buffer.byteLength(base64,'base64')>10*1024*1024)throw new Error('商品参考图不能超过 10MB');
   return {mimeType:match[1]==='image/jpg'?'image/jpeg':match[1],base64};
 }
 function aspectRatio(size?:string){return size==='1536x1024'?'3:2':size==='1024x1536'?'2:3':'1:1'}
@@ -59,20 +59,21 @@ async function generateWithOpenAI(body:Body):Promise<Generated>{
 export async function POST(request:NextRequest){
   const user=await getCurrentUser();if(!user)return NextResponse.json({error:'登录状态已失效，请重新登录'},{status:401});
   let body:Body;try{body=await request.json() as Body;}catch{return NextResponse.json({error:'请求格式不正确'},{status:400});}
-  const prompt=body.prompt?.trim();if(!prompt)return NextResponse.json({error:'提示词不能为空'},{status:400});if(prompt.length>12_000)return NextResponse.json({error:'提示词过长，请控制在 12000 字以内'},{status:400});
+  const prompt=body.prompt?.trim();if(!prompt)return NextResponse.json({error:'提示词不能为空'},{status:400});if(prompt.length>12_000)return NextResponse.json({error:'提示词过长，请控制在 12000 字以内'},{status:400});if(!body.projectTitle?.trim())return NextResponse.json({error:'请填写商品名称'},{status:400});if(!body.referenceImage)return NextResponse.json({error:'请先上传真实商品参考图，才能生成商品素材'},{status:400});
   const provider:Provider=body.provider==='openai'?'openai':'gemini';const creditCost=provider==='openai'?10:6;
   if(user.credits<creditCost)return NextResponse.json({error:`算力不足，本次需要 ${creditCost} 点，当前剩余 ${user.credits} 点`},{status:402});
+  await ensureSelfHostedSchema();
+  const reserved=await db()<Array<{credits:number}>>`UPDATE app_users SET credits=credits-${creditCost} WHERE id=${user.id} AND credits>=${creditCost} RETURNING credits`;
+  if(!reserved[0])return NextResponse.json({error:'算力余额发生变化，请刷新后重试'},{status:409});
   try{
-    await ensureSelfHostedSchema();const generated=provider==='openai'?await generateWithOpenAI({...body,prompt}):await generateWithGemini({...body,prompt});
+    const generated=provider==='openai'?await generateWithOpenAI({...body,prompt}):await generateWithGemini({...body,prompt});
     let projectId=body.projectId||null;
     if(projectId){const owned=await db()<Array<{id:string}>>`SELECT id FROM projects WHERE id=${projectId} AND owner_id=${user.id} LIMIT 1`;if(!owned[0])projectId=null;}
     if(!projectId){projectId=randomUUID();await db()`INSERT INTO projects(id,owner_id,asin,title,category,market,status) VALUES(${projectId},${user.id},${body.asin||null},${body.projectTitle?.trim()||'未命名 Amazon 项目'},${body.category||'Amazon'},${body.market||'Amazon US'},'review')`;}
     const assetId=randomUUID();const extension=generated.mimeType.includes('jpeg')?'jpg':generated.mimeType.includes('webp')?'webp':'png';const storageKey=`${assetId}.${extension}`;
     const dataDir=process.env.ASSET_DATA_DIR||path.join(process.cwd(),'data');await mkdir(path.join(dataDir,'assets'),{recursive:true});await writeFile(path.join(dataDir,'assets',storageKey),Buffer.from(generated.base64,'base64'),{mode:0o600});
-    const updated=await db()<Array<{credits:number}>>`UPDATE app_users SET credits=credits-${creditCost} WHERE id=${user.id} AND credits>=${creditCost} RETURNING credits`;
-    if(!updated[0])return NextResponse.json({error:'算力余额发生变化，请刷新后重试'},{status:409});
     await db()`INSERT INTO generated_assets(id,owner_id,project_id,provider,model,slot,prompt,storage_key,mime_type,credit_cost) VALUES(${assetId},${user.id},${projectId},${provider},${generated.model},${body.slot||'IMAGE'},${prompt},${storageKey},${generated.mimeType},${creditCost})`;
     await db()`UPDATE projects SET image_count=image_count+1,status='review',updated_at=now() WHERE id=${projectId}`;
-    return NextResponse.json({imageUrl:`/api/assets/${assetId}`,assetId,projectId,creditsRemaining:updated[0].credits,provider:provider==='openai'?'GPT Image 2':'Nano Banana 2'});
-  }catch(error){console.error('NovaCanvas image generation failed',error);return NextResponse.json({error:error instanceof Error?error.message:'图片生成失败'},{status:503});}
+    return NextResponse.json({imageUrl:`/api/assets/${assetId}`,assetId,projectId,creditsRemaining:reserved[0].credits,provider:provider==='openai'?'GPT Image 2':'Nano Banana 2'});
+  }catch(error){await db()`UPDATE app_users SET credits=credits+${creditCost} WHERE id=${user.id}`;console.error('NovaCanvas image generation failed',error);return NextResponse.json({error:error instanceof Error?error.message:'图片生成失败'},{status:503});}
 }

@@ -10,8 +10,8 @@ export async function POST(request:NextRequest){
   const form=await request.formData();
   const email=String(form.get('email')||'').trim();
   const password=String(form.get('password')||'');
-  const next=String(form.get('next')||'/');
-  const safeNext=next.startsWith('/')&&!next.startsWith('//')?next:'/';
+  const next=String(form.get('next')||'/workbench');
+  const safeNext=next.startsWith('/')&&!next.startsWith('//')?next:'/workbench';
   const base=appBase(request);
   try{
     const authenticated=await login(email,password);

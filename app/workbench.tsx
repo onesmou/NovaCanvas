@@ -8,6 +8,7 @@ type PromptCard = { id:string; slot:string; title:string; goal:string; prompt:st
 type ImageProvider = 'openai' | 'gemini';
 type ProjectRow = { id:string; asin:string|null; title:string; imageCount:number; status:'draft'|'generating'|'review'|'complete' };
 type ProviderStatus={configured:boolean;model:string;cost:number};
+type GenerationTask={id:string;slot:string;title:string;state:'generating'|'complete'|'failed';imageUrl?:string;message?:string;provider:ImageProvider};
 
 const promptLibrary: PromptCard[] = [
   { id:'main',slot:'01',title:'MAIN 合规白底主图',goal:'搜索页点击率',badge:'合规必做',prompt:'创建 Amazon MAIN 商品主图。使用上传的真实商品作为唯一主体，纯白背景 RGB 255,255,255，商品居中并完整可见，占画面 85%–90%，2000×2000 正方形。专业柔光棚拍，真实颜色，边缘清晰，仅保留轻微自然接触阴影。严格保持商品结构、包装颜色、标签位置与文字，不改变 SKU。',negative:'无道具，无配件，无模特，无文字叠加，无徽章，无边框，无水印，无额外 Logo，无拼贴，无夸张光效，不裁切商品，不生成未包含在售卖套装中的物品。'},
@@ -34,10 +35,8 @@ export default function Workbench({user}:{user:AppUser}) {
   const [query,setQuery]=useState('');
   const [libraryFilter,setLibraryFilter]=useState<'all'|'listing'|'aplus'|'video'|'campaign'>('all');
   const [toast,setToast]=useState('');
-  const [running,setRunning]=useState(false);
   const [compliance,setCompliance]=useState(true);
   const [provider,setProvider]=useState<ImageProvider>('gemini');
-  const [generatedImage,setGeneratedImage]=useState<string|null>(null);
   const [projectId,setProjectId]=useState<string|null>(null);
   const [creditsRemaining,setCreditsRemaining]=useState<number|null>(null);
   const [projectTitle,setProjectTitle]=useState('');
@@ -46,25 +45,28 @@ export default function Workbench({user}:{user:AppUser}) {
   const [brand,setBrand]=useState('');
   const [projectRows,setProjectRows]=useState<ProjectRow[]>([]);
   const [providers,setProviders]=useState<Record<ImageProvider,ProviderStatus>|null>(null);
+  const [tasks,setTasks]=useState<GenerationTask[]>([]);
   const filtered=useMemo(()=>promptLibrary.filter(p=>(p.title+p.goal+p.slot).toLowerCase().includes(query.toLowerCase())).filter(p=>libraryFilter==='all'||(libraryFilter==='listing'&&/^0[1-7]$/.test(p.slot))||(libraryFilter==='aplus'&&p.slot==='A+')||(libraryFilter==='video'&&p.slot==='视频')||(libraryFilter==='campaign'&&p.slot==='营销')),[query,libraryFilter]);
-  useEffect(()=>{fetch('/api/projects').then(r=>r.ok?r.json():null).then(data=>{const payload=data as {projects?:ProjectRow[]}|null;const rows=payload?.projects??[];setProjectRows(rows);const requested=new URLSearchParams(window.location.search).get('project');const current=rows.find(p=>p.id===requested);if(current){setProjectId(current.id);setProjectTitle(current.title);setAsin(current.asin||'');notify('已载入项目，可继续生成素材')}}).catch(()=>setProjectRows([]))},[generatedImage]);
+  useEffect(()=>{fetch('/api/projects').then(r=>r.ok?r.json():null).then(data=>{const payload=data as {projects?:ProjectRow[]}|null;const rows=payload?.projects??[];setProjectRows(rows);const requested=new URLSearchParams(window.location.search).get('project');const current=rows.find(p=>p.id===requested);if(current){setProjectId(current.id);setProjectTitle(current.title);setAsin(current.asin||'');notify('已载入项目，可继续生成素材')}}).catch(()=>setProjectRows([]))},[tasks]);
   useEffect(()=>{fetch('/api/providers').then(r=>r.ok?r.json():null).then(raw=>{const data=raw as Record<ImageProvider,ProviderStatus>|null;if(data){setProviders(data);if(!data.gemini.configured&&data.openai.configured)setProvider('openai')}}).catch(()=>setProviders(null))},[]);
   function notify(text:string){setToast(text);setTimeout(()=>setToast(''),1800)}
-  function upload(e:ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{setProductImage(String(reader.result));notify('商品参考图已上传，生成时将锁定外观')};reader.readAsDataURL(f)}
+  function upload(e:ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];if(!f)return;if(f.size>10*1024*1024){notify('商品参考图不能超过 10MB');return;}const reader=new FileReader();reader.onload=()=>{setProductImage(String(reader.result));notify('商品参考图已上传，生成时将锁定外观')};reader.readAsDataURL(f)}
   function applyPrompt(p:PromptCard){setSelected(p);setPrompt(`${p.prompt}\n\n品类：${category}；站点：Amazon ${market}。\n负面约束：${p.negative}`);notify(`已载入「${p.title}」，商品资料会在生成时自动合并`)}
   async function generate(){
     if(!providers?.[provider]?.configured){notify(`${provider==='gemini'?'Nano Banana':'GPT Image'} 尚未配置 API 密钥`);return;}
     if(!projectTitle.trim()){notify('请先填写商品名称');return;}
+    if(!productImage){notify('请先上传真实商品参考图，才能锁定商品外观');return;}
+    if(tasks.some(task=>task.slot===selected.slot&&task.state==='generating')){notify('这一张正在生成，请先选择其他图位继续制作');return;}
+    if(tasks.filter(task=>task.state==='generating').length>=3){notify('当前最多可同时生成 3 张，请等待其中一张完成');return;}
     const productContext=[`商品名称：${projectTitle.trim()}`,brand.trim()&&`品牌：${brand.trim()}`,sellingPoints.trim()&&`已确认核心卖点：${sellingPoints.trim()}`,asin.trim()&&`ASIN：${asin.trim()}`,`品类：${category}`,`目标站点：Amazon ${market}`].filter(Boolean).join('\n');
     const enrichedPrompt=`${prompt}\n\n本次真实商品资料（不得虚构或改写事实）：\n${productContext}`;
-    setRunning(true); setGeneratedImage(null); notify(`正在调用 ${provider==='gemini'?'Nano Banana':'GPT Image'}…`);
+    const taskId=crypto.randomUUID();setTasks(current=>[{id:taskId,slot:selected.slot,title:selected.title,state:'generating',provider},...current]);notify(`已加入生成队列，可继续制作其他图位`);
     try{
       const response=await fetch('/api/images/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider,prompt:enrichedPrompt,referenceImage:productImage,size:selected.id==='a-hero'?'1536x1024':'1024x1024',projectId,projectTitle,slot:selected.slot,category,market:`Amazon ${market}`,asin:asin.trim()||undefined})});
       const data=await response.json() as {imageUrl?:string;projectId?:string;creditsRemaining?:number;error?:string};
       if(!response.ok||!data.imageUrl)throw new Error(data.error||'任务未返回图片');
-      setGeneratedImage(data.imageUrl);setProjectId(data.projectId??null);setCreditsRemaining(data.creditsRemaining??null);notify('已生成并保存至项目素材库');
-    }catch(error){notify(error instanceof Error?error.message:'生成失败，请稍后重试')}
-    finally{setRunning(false)}
+      setProjectId(data.projectId??null);setCreditsRemaining(data.creditsRemaining??null);setTasks(current=>current.map(task=>task.id===taskId?{...task,state:'complete',imageUrl:data.imageUrl}:task));notify(`${selected.title} 已完成并保存`);
+    }catch(error){const message=error instanceof Error?error.message:'生成失败，请稍后重试';setTasks(current=>current.map(task=>task.id===taskId?{...task,state:'failed',message}:task));notify(message)}
   }
 
   return <main className="amazon-app">
@@ -73,7 +75,7 @@ export default function Workbench({user}:{user:AppUser}) {
       <div className="amazon-mode"><span>amazon</span><b>Creative OS</b><i>US</i></div>
       <nav aria-label="主导航">
         <p>生产中心</p>
-        <Link className="active" href="/"><span>▦</span>套图工作台</Link>
+        <Link className="active" href="/workbench"><span>▦</span>套图工作台</Link>
         <a href="#prompt-library"><span>✦</span>提示词库<em>12</em></a>
         <Link href="/a-plus"><span>A+</span>A+ 内容画布</Link>
         <Link href="/compliance"><span>✓</span>合规检测</Link>
@@ -82,25 +84,25 @@ export default function Workbench({user}:{user:AppUser}) {
         <Link href="/account"><span>◎</span>账号与套餐</Link>
         {(user.role==='owner'||user.role==='admin')&&<Link href="/admin"><span>⌘</span>管理后台</Link>}
       </nav>
-      <div className="usage-card"><div><span>账户算力</span><b>{creditsRemaining===null?'已连接账本':`${creditsRemaining} 点可用`}</b></div><i><u style={{width:creditsRemaining===null?'70%':`${Math.min(100,Math.max(8,creditsRemaining/2))}%`}} /></i><small>{creditsRemaining===null?'生成时自动扣减并记录':'已按作图引擎自动计费'}</small><button onClick={()=>window.location.href='/account'}>查看账户与用量</button></div>
+      <div className="usage-card"><div><span>账户算力</span><b>{creditsRemaining===null?`${user.credits} 点可用`:`${creditsRemaining} 点可用`}</b></div><small>生成后自动扣减并记录；余额不足时不会发起任务。</small><button onClick={()=>window.location.href='/account'}>查看账户与用量</button></div>
     </aside>
 
     <section className="amazon-main">
       <header className="amazon-topbar">
-        <div><b>Amazon 套图工作台</b><span>生成结果自动保存到自己的服务器</span></div>
+        <div><b>Amazon 套图工作台</b><span>商品资料与生成素材仅保存在公司服务器</span></div>
         <div className="top-actions"><a className="help-link" href="#prompt-library">使用指南</a><Link href="/account" className="user-chip"><i>{user.name.slice(0,2).toUpperCase()}</i><span><b>{user.name}</b><small>{user.role==='owner'?'所有者':user.role==='admin'?'管理员':'成员'}</small></span><em>⌄</em></Link></div>
       </header>
 
       <div className="amazon-content">
         <section className="hero-row">
-          <div><p>AMAZON LISTING IMAGE SYSTEM</p><h1>从一张产品图，到完整高转化 Listing</h1><span>基于 Amazon 官方图片规范与经过验证的电商提示词结构，自动生成 7 图故事板和 A+ 内容。</span></div>
-          <div className="compliance-score"><i>14</i><span><b>合规规则</b><small>生成前自动检查</small></span><em>{compliance?'已开启':'已关闭'}</em></div>
+          <div><p>AMAZON LISTING IMAGE SYSTEM</p><h1>从真实商品图，制作完整 Listing 素材</h1><span>按 7 图故事板逐张制作，商品资料自动合并到提示词，并留存到项目素材库。</span></div>
+          <div className="compliance-score"><i>14</i><span><b>基础合规规则</b><small>供运营生成前核对</small></span><em>{compliance?'已开启':'未启用'}</em></div>
         </section>
 
         <section className="setup-card">
-          <div className="setup-title"><span>01</span><div><h2>商品资料</h2><p>上传真实商品图，AI 将锁定外观、材质、包装与标签</p></div><button onClick={()=>{document.getElementById('asin-input')?.focus();notify('请输入 ASIN；后续可接入 SP-API 自动导入')}}>填写 ASIN</button></div>
+          <div className="setup-title"><span>01</span><div><h2>商品资料</h2><p>先上传真实商品图，再填写商品资料；这是生成商品图的必要步骤。</p></div><button onClick={()=>document.getElementById('asin-input')?.focus()}>填写 ASIN</button></div>
           <div className="setup-grid">
-            <label className={`amazon-upload ${productImage?'filled':''}`}><input type="file" accept="image/*" onChange={upload}/>{productImage?<img src={productImage} alt="商品参考图"/>:<><i>↥</i><b>上传商品参考图</b><span>正面白底图效果最佳</span><small>PNG / JPG / WEBP · 最大 20MB</small></>}</label>
+            <label className={`amazon-upload ${productImage?'filled':''}`}><input type="file" accept="image/png,image/jpeg,image/webp" onChange={upload}/>{productImage?<img src={productImage} alt="商品参考图"/>:<><i>↥</i><b>上传商品参考图</b><span>正面白底图效果最佳 · 生成必需</span><small>PNG / JPG / WEBP · 最大 10MB</small></>}</label>
             <div className="form-fields">
               <label>商品名称<input value={projectTitle} onChange={e=>setProjectTitle(e.target.value)} /></label>
               <div><label>Amazon 站点<select value={market} onChange={e=>setMarket(e.target.value)}><option>美国站</option><option>英国站</option><option>德国站</option><option>日本站</option></select></label><label>商品品类<select value={category} onChange={e=>setCategory(e.target.value)}>{categories.map(c=><option key={c}>{c}</option>)}</select></label></div>
@@ -125,8 +127,8 @@ export default function Workbench({user}:{user:AppUser}) {
             <div className="editor-meta"><span>{selected.slot}</span><div><b>{selected.title}</b><small>目标：{selected.goal}</small></div><label className="provider-select"><span>作图引擎</span><select value={provider} onChange={e=>setProvider(e.target.value as ImageProvider)}><option value="gemini" disabled={providers? !providers.gemini.configured:false}>Nano Banana{providers&&!providers.gemini.configured?'（未配置）':''}</option><option value="openai" disabled={providers? !providers.openai.configured:false}>GPT Image{providers&&!providers.openai.configured?'（未配置）':''}</option></select></label>{selected.badge&&<em>{selected.badge}</em>}</div>
             <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} aria-label="Amazon 图片提示词" />
             <div className="prompt-chips">{['锁定商品外观','移动端可读','真实商业摄影','英文文案','高分辨率'].map(x=><button key={x} onClick={()=>setPrompt(v=>v+`，${x}`)}>+ {x}</button>)}</div>
-            <div className="editor-footer"><div><span>✦ Prompt Guard</span><small>已检测：无违禁词 · 约束完整</small></div><button className="magic" onClick={generate} disabled={running}>{running?'编排中…':'✦ 生成这一张'}</button></div>
-            {generatedImage&&<div className="generated-result"><img src={generatedImage} alt={`${selected.title} 生成结果`}/><div><b>已完成并保存 · {provider==='gemini'?'Nano Banana':'GPT Image'}</b><small>已归档到当前项目，仅当前工作空间成员可访问</small><a href={generatedImage} download={`amazon-${selected.id}.png`}>下载 PNG</a></div></div>}
+            <div className="editor-footer"><div><span>✦ 基础规则提示</span><small>请仅填写真实、可证明的卖点；生成后仍需人工复核。</small></div><button className="magic" onClick={generate} disabled={tasks.some(task=>task.slot===selected.slot&&task.state==='generating')}>{tasks.some(task=>task.slot===selected.slot&&task.state==='generating')?'此图生成中…':'✦ 生成这一张'}</button></div>
+            {tasks.length>0&&<div className="generation-queue" aria-live="polite"><b>生成任务（最多同时 3 张）</b>{tasks.slice(0,5).map(task=><div key={task.id} className={`task-${task.state}`}><span>{task.slot}</span><p><strong>{task.title}</strong><small>{task.state==='generating'?'生成中，可继续选择其他图位':task.state==='complete'?'已保存到项目素材库':task.message||'生成失败'}</small></p>{task.imageUrl&&<a href={`${task.imageUrl}?download=1`}>下载</a>}</div>)}</div>}
           </div>
         </section>
 
