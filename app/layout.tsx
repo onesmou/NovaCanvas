@@ -3,6 +3,7 @@ import { Geist } from 'next/font/google';
 import './globals.css';
 import './image-editor.css';
 import './image-editor-fixes.css';
+import './asset-list-fixes.css';
 const geist = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.APP_URL || 'http://localhost:3000'),
