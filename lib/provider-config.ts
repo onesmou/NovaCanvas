@@ -1,0 +1,12 @@
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
+import { db, ensureSelfHostedSchema } from './selfhost-db';
+
+export type Adapter='openai-images'|'gemini-interactions';
+export type ProviderConfig={id:string;key:string;name:string;adapter:Adapter;baseUrl:string;apiKey:string;model:string;creditCost:number;enabled:boolean;supportsEdit:boolean};
+const secret=()=>createHash('sha256').update(process.env.CONFIG_ENCRYPTION_KEY||process.env.DATABASE_URL||'novacanvas-local-only').digest();
+function encrypt(value:string){const iv=randomBytes(12);const cipher=createCipheriv('aes-256-gcm',secret(),iv);const body=Buffer.concat([cipher.update(value,'utf8'),cipher.final()]);return `${iv.toString('base64')}.${cipher.getAuthTag().toString('base64')}.${body.toString('base64')}`}
+function decrypt(value:string){const [iv,tag,body]=value.split('.');const decipher=createDecipheriv('aes-256-gcm',secret(),Buffer.from(iv,'base64'));decipher.setAuthTag(Buffer.from(tag,'base64'));return Buffer.concat([decipher.update(Buffer.from(body,'base64')),decipher.final()]).toString('utf8')}
+export async function getProviderConfigs(){await ensureSelfHostedSchema();const rows=await db()<Array<Omit<ProviderConfig,'apiKey'> & {apiKeyCiphertext:string}>>`SELECT id,key,name,adapter,base_url AS "baseUrl",api_key_ciphertext AS "apiKeyCiphertext",model,credit_cost AS "creditCost",enabled,supports_edit AS "supportsEdit" FROM image_provider_configs WHERE enabled=true ORDER BY name`;return rows.map(row=>({...row,apiKey:decrypt(row.apiKeyCiphertext)}));}
+export async function saveProviderConfig(input:Omit<ProviderConfig,'id'>){await ensureSelfHostedSchema();const id=randomUUID();await db()`INSERT INTO image_provider_configs(id,key,name,adapter,base_url,api_key_ciphertext,model,credit_cost,enabled,supports_edit) VALUES(${id},${input.key},${input.name},${input.adapter},${input.baseUrl.replace(/\/+$/,'')},${encrypt(input.apiKey)},${input.model},${input.creditCost},${input.enabled},${input.supportsEdit}) ON CONFLICT(key) DO UPDATE SET name=EXCLUDED.name,adapter=EXCLUDED.adapter,base_url=EXCLUDED.base_url,api_key_ciphertext=EXCLUDED.api_key_ciphertext,model=EXCLUDED.model,credit_cost=EXCLUDED.credit_cost,enabled=EXCLUDED.enabled,supports_edit=EXCLUDED.supports_edit,updated_at=now()`;}
+export async function publicProviders(){const all=await getProviderConfigs();return all.map(({apiKey,...row})=>row)}
+export async function getProviderByKey(key:string){return (await getProviderConfigs()).find(provider=>provider.key===key)||null}
