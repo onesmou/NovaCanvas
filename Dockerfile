@@ -18,6 +18,10 @@ COPY --from=builder /app/.next/static ./.next/static
 RUN css_file=$(find .next/static/chunks -type f -name '*.css' | head -n 1) \
   && test -n "$css_file" \
   && cp "$css_file" .next/static/chunks/0qzkk89mu3ll-.css
+# 旧版入口还会请求一个已更名的启动脚本。命中时只重定向一次到带版本参数的新页面，
+# 避免旧 HTML 与新构建产物混用而出现空白页。
+RUN printf '%s' "if(location.search.indexOf('__build=')<0){location.replace(location.pathname+'?__build=20260904'+location.hash)}" \
+  > .next/static/chunks/14168spi85634.js
 COPY --from=builder /app/public ./public
 EXPOSE 3000
 CMD ["node", "server.js"]
