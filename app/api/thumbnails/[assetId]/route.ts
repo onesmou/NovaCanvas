@@ -1,0 +1,20 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { NextRequest, NextResponse } from 'next/server';
+import { validThumbnailToken } from '../../../../lib/thumbnail-access';
+
+export const runtime = 'nodejs';
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ assetId: string }> }) {
+  const { assetId } = await params;
+  const key = request.nextUrl.searchParams.get('k') || '';
+  const ownerId = request.nextUrl.searchParams.get('o') || '';
+  const expires = Number(request.nextUrl.searchParams.get('e'));
+  const token = request.nextUrl.searchParams.get('s') || '';
+  if (key !== path.basename(key) || !key.endsWith('.webp') || !validThumbnailToken(assetId, key, ownerId, expires, token)) return new NextResponse(null, { status: 404 });
+  try {
+    const dataDir = process.env.ASSET_DATA_DIR || path.join(process.cwd(), 'data');
+    const data = await readFile(path.join(dataDir, 'thumbs', key));
+    return new NextResponse(data, { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=86400, immutable' } });
+  } catch { return new NextResponse(null, { status: 404 }); }
+}

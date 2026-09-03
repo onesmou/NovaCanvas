@@ -1,12 +1,13 @@
 import postgres from 'postgres';
 
 let client: ReturnType<typeof postgres> | null = null;
+let schemaReady: Promise<void> | null = null;
 export function db() {
   if (!client) client = postgres(process.env.DATABASE_URL || 'postgres://novacanvas:novacanvas@localhost:5432/novacanvas', { max: 10, idle_timeout: 20 });
   return client;
 }
 
-export async function ensureSelfHostedSchema() {
+async function initializeSchema() {
   const sql = db();
   await sql`CREATE TABLE IF NOT EXISTS app_users (id uuid PRIMARY KEY, email text UNIQUE NOT NULL, name text NOT NULL, password_hash text NOT NULL, role text NOT NULL DEFAULT 'member', credits integer NOT NULL DEFAULT 200, created_at timestamptz NOT NULL DEFAULT now())`;
   await sql`CREATE TABLE IF NOT EXISTS app_sessions (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE, expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`;
@@ -25,4 +26,9 @@ export async function ensureSelfHostedSchema() {
   await sql`CREATE INDEX IF NOT EXISTS idx_generated_assets_project_created ON generated_assets(project_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_generated_assets_root_version ON generated_assets(root_asset_id, version_number DESC)`;
   await sql`CREATE TABLE IF NOT EXISTS image_provider_configs (id uuid PRIMARY KEY, key text UNIQUE NOT NULL, name text NOT NULL, adapter text NOT NULL, base_url text NOT NULL, api_key_ciphertext text NOT NULL, model text NOT NULL, credit_cost integer NOT NULL DEFAULT 6, enabled boolean NOT NULL DEFAULT false, supports_edit boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now())`;
+}
+
+export async function ensureSelfHostedSchema() {
+  if (!schemaReady) schemaReady = initializeSchema().catch(error => { schemaReady = null; throw error; });
+  return schemaReady;
 }

@@ -54,6 +54,8 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     if (latest) await db()`UPDATE generated_assets SET is_current=(id=${latest.id}) WHERE root_asset_id=${root}`;
   }
   await db()`UPDATE projects SET image_count=GREATEST(0,image_count-${targets.length}),updated_at=now() WHERE id=${asset.projectId}`;
+  const [remaining] = await db()<Array<{ count: number }>>`SELECT count(*)::int AS count FROM generated_assets WHERE project_id=${asset.projectId}`;
+  if (remaining?.count === 0) await db()`DELETE FROM projects WHERE id=${asset.projectId}`;
   const dataDir = process.env.ASSET_DATA_DIR || path.join(process.cwd(), 'data');
   await Promise.all(targets.flatMap(item => [
     unlink(path.join(dataDir, 'assets', path.basename(item.storageKey))).catch(() => undefined),
