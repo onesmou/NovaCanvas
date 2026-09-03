@@ -25,7 +25,7 @@ const promptLibrary: PromptCard[] = [
   { id:'video',slot:'视频',title:'7镜头视频分镜',goal:'主图视频脚本',prompt:'为 Amazon 商品视频创建 7 镜头视觉分镜：1 白底英雄镜头；2 使用痛点；3 产品登场；4 核心结构特写；5 真实使用；6 包装清单；7 品牌收束。每个镜头给出构图、镜头运动、光线和 3–5 秒动作，所有镜头保持同一 SKU 外观与品牌色。',negative:'不生成不可验证的承诺，不加入竞品商标，不设计危险用法，不使用过度特效掩盖产品，不让字幕超过安全区。'},
 ];
 
-const categories = ['家居厨房','美容个护','消费电子','户外运动','宠物用品','母婴用品','服饰箱包','汽车用品'];
+const categories = ['家居厨房','家具家装','灯具照明','园艺庭院','清洁用品','美容个护','健康保健','消费电子','手机数码配件','电脑办公','户外运动','运动健身','玩具游戏','宠物用品','母婴用品','服饰箱包','鞋靴配饰','珠宝首饰','汽车用品','工具五金','工业与科研','办公文具','食品饮料','乐器影音','影视与摄影','节庆派对','礼品与收藏','其他品类'];
 export default function Workbench({user}:{user:AppUser}) {
   const [productImage,setProductImage]=useState<string|null>(null);
   const [category,setCategory]=useState(categories[0]);
