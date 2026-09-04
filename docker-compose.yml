@@ -9,7 +9,8 @@ services:
       - "127.0.0.1:3001:3000"
     env_file: .env
     environment:
-      APP_URL: ${APP_URL:-https://design.your-company.com}
+      # 生产环境请在未提交的 .env 中设置实际 HTTPS 域名。
+      APP_URL: ${APP_URL:-http://localhost:3000}
     volumes:
       - assets_data:/app/data
     depends_on:
