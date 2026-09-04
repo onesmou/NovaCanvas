@@ -3,6 +3,7 @@ import path from 'node:path';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../lib/selfhost-auth';
 import { db, ensureSelfHostedSchema } from '../../../../lib/selfhost-db';
+import { assetDirectory } from '../../../../lib/image-storage';
 
 export const runtime = 'nodejs';
 
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const safeName = path.basename(asset.storageKey);
   if (safeName !== asset.storageKey) return NextResponse.json({ error: '素材路径无效' }, { status: 400 });
   try {
-    const dataDir = process.env.ASSET_DATA_DIR || path.join(process.cwd(), 'data');
+    const dataDir = assetDirectory();
     const download = request.nextUrl.searchParams.get('download') === '1';
     const useThumbnail = request.nextUrl.searchParams.get('thumb') === '1' && !download && asset.thumbnailKey;
     const fileName = useThumbnail ? path.basename(asset.thumbnailKey!) : safeName;
@@ -56,7 +57,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   await db()`UPDATE projects SET image_count=GREATEST(0,image_count-${targets.length}),updated_at=now() WHERE id=${asset.projectId}`;
   const [remaining] = await db()<Array<{ count: number }>>`SELECT count(*)::int AS count FROM generated_assets WHERE project_id=${asset.projectId}`;
   if (remaining?.count === 0) await db()`DELETE FROM projects WHERE id=${asset.projectId}`;
-  const dataDir = process.env.ASSET_DATA_DIR || path.join(process.cwd(), 'data');
+  const dataDir = assetDirectory();
   await Promise.all(targets.flatMap(item => [
     unlink(path.join(dataDir, 'assets', path.basename(item.storageKey))).catch(() => undefined),
     item.thumbnailKey ? unlink(path.join(dataDir, 'thumbs', path.basename(item.thumbnailKey))).catch(() => undefined) : Promise.resolve(),
