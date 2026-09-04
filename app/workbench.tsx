@@ -12,17 +12,30 @@ type GenerationTask={id:string;slot:string;title:string;state:'generating'|'comp
 
 const promptLibrary: PromptCard[] = [
   { id:'main',slot:'01',title:'MAIN 合规白底主图',goal:'搜索页点击率',badge:'合规必做',prompt:'创建 Amazon MAIN 商品主图。使用上传的真实商品作为唯一主体，纯白背景 RGB 255,255,255，商品居中并完整可见，占画面 85%–90%，2000×2000 正方形。专业柔光棚拍，真实颜色，边缘清晰，仅保留轻微自然接触阴影。严格保持商品结构、包装颜色、标签位置与文字，不改变 SKU。',negative:'无道具，无配件，无模特，无文字叠加，无徽章，无边框，无水印，无额外 Logo，无拼贴，无夸张光效，不裁切商品，不生成未包含在售卖套装中的物品。'},
-  { id:'hero',slot:'02',title:'核心卖点信息图',goal:'3秒理解价值',badge:'高转化',prompt:'创建 Amazon 第二张卖点信息图，商品占画面中心 55%–65%，浅色品牌背景。围绕商品添加恰好 3 个简短卖点，每条不超过 6 个英文单词，使用清晰无衬线字体、细引导线和简洁图标。信息层级强，移动端缩略图仍可阅读。卖点内容严格来自输入资料，不虚构性能。',negative:'不使用密集小字，不超过 3 个卖点，不重复文字，不拼错品牌和参数，不使用未经证实的认证、第一、最佳、100% 等绝对化声明。'},
+  { id:'hero',slot:'02',title:'核心卖点信息图',goal:'3秒理解价值',badge:'高转化',prompt:'创建 Amazon 第二张卖点信息图，商品占画面中心 55%–65%，浅色品牌背景。围绕商品设计 3 组简洁图标、细引导线和清晰的文字安全区；图内不生成具体文字、数字、品牌名或参数，后续由系统叠加真实卖点。信息层级强，移动端缩略图仍可阅读。卖点所表达的能力必须严格来自输入资料，不虚构性能。',negative:'不使用密集小字，不超过 3 组信息，不生成乱码、伪文字或猜测参数，不使用未经证实的认证、第一、最佳、100% 等绝对化声明。'},
   { id:'life',slot:'03',title:'真实使用场景图',goal:'代入使用情境',prompt:'创建 Amazon 次图生活场景，产品在真实且符合品类的使用环境中，产品是明确焦点，3/4 视角，比例真实。自然窗光结合商业柔光，环境整洁但不失生活感，展现目标顾客正在解决的具体任务。保留真实商品几何、材质、颜色和标签。',negative:'不让产品缩成背景装饰，不使用不相关道具，不改变产品尺寸，不生成危险用法，不使用虚假前后对比，不添加营销文字或水印。'},
-  { id:'size',slot:'04',title:'尺寸与比例说明图',goal:'降低尺寸误判',prompt:'创建 Amazon 尺寸与比例图。商品正视或 3/4 视角，浅灰白背景，完整展示长、宽、高的测量线与箭头，预留 3 处清晰数值区域。加入一个中性的日常物品或手部作为真实比例参照，但不得遮挡商品。版式简洁、技术感、移动端可读。',negative:'不得猜测尺寸，不生成错误单位，不扭曲比例，不放置多个参照物，不让测量线穿过文字，不添加与尺寸无关的卖点。'},
+  { id:'size',slot:'04',title:'尺寸与比例说明图',goal:'降低尺寸误判',prompt:'创建 Amazon 尺寸与比例图。商品正视或 3/4 视角，浅灰白背景，完整展示长、宽、高的测量线与箭头，并为每个测量值预留清晰的空白标签安全区；图内不生成尺寸数字和单位，后续由系统填入真实参数。可加入一个中性的日常物品或手部作为真实比例参照，但不得遮挡商品。版式简洁、技术感、移动端可读。',negative:'不得猜测尺寸，不生成错误单位、乱码或伪数字，不扭曲比例，不放置多个参照物，不让测量线穿过标签安全区，不添加与尺寸无关的卖点。'},
   { id:'detail',slot:'05',title:'材质功能特写',goal:'证明品质细节',prompt:'创建 Amazon 商品细节特写。选择最能证明品质或功能的结构，使用微距商业摄影，方向性柔光揭示真实纹理、接缝、表面处理或功能结构。加入一个放大细节窗与 2 个极短说明标签，主商品仍可被识别。',negative:'不发明不存在的纹理、接口或结构，不磨平真实瑕疵，不使用虚假材质，不夸大微观结构，不生成无法验证的技术数字。'},
-  { id:'bundle',slot:'06',title:'包装清单 / What’s Included',goal:'减少配件争议',prompt:'创建 Amazon 包装清单图。将所有实际包含的商品、配件和包装以整齐对称的俯拍方式排列，浅色纯净背景，比例准确，互不遮挡。每件物品预留简短英文名称区域，整体清晰、诚实、易盘点。',negative:'不得加入未随订单提供的道具或赠品，不重复配件，不改变数量、颜色和型号，不使用装饰物制造错误暗示。'},
-  { id:'compare',slot:'07',title:'差异化对比图',goal:'回答购买犹豫',prompt:'创建 Amazon 产品对比信息图，左右双栏或表格式清晰布局。左侧突出本产品的 4 个真实优势，右侧使用中性“普通方案”表达常见限制。用可核验的材质、尺寸、容量、结构或使用体验对比，不出现竞品商标。',negative:'不攻击竞品，不使用竞品名称或 Logo，不虚构数据，不写“Best/No.1/Guaranteed”，不制作无法证明的效果对比。'},
+  { id:'bundle',slot:'06',title:'包装清单 / What’s Included',goal:'减少配件争议',prompt:'创建 Amazon 包装清单图。将所有实际包含的商品、配件和包装以整齐对称的俯拍方式排列，浅色纯净背景，比例准确，互不遮挡。为每件物品预留简短名称标签安全区，图内不生成英文名称，后续由系统填入真实清单；整体清晰、诚实、易盘点。',negative:'不得加入未随订单提供的道具或赠品，不重复配件，不改变数量、颜色和型号，不生成乱码或猜测名称，不使用装饰物制造错误暗示。'},
+  { id:'compare',slot:'07',title:'差异化对比图',goal:'回答购买犹豫',prompt:'创建 Amazon 产品对比信息图，左右双栏或表格式清晰布局。左侧和右侧各设计 4 行可编辑的对比标签安全区，图内不生成具体文字、数字或竞品名称；后续由系统填入经核验的材质、尺寸、容量、结构或使用体验。左栏突出本产品，右栏以中性“普通方案”表达常见限制，不出现竞品商标。',negative:'不攻击竞品，不使用竞品名称或 Logo，不虚构数据，不生成乱码、伪表格文字或“Best/No.1/Guaranteed”，不制作无法证明的效果对比。'},
   { id:'a-hero',slot:'A+',title:'A+ 品牌横幅',goal:'品牌故事与价值',badge:'1464×600',prompt:'创建 Amazon A+ 宽幅品牌横幅，宽屏商业摄影构图。产品在真实使用场景中，右侧为产品与环境，左侧保留干净负空间用于后期标题和品牌文案。高分辨率、自然比例、品牌色克制统一，体现品牌使命与核心使用价值。',negative:'图片内不生成长段文字，不加入价格、促销、联系方式、二维码、外部链接、保证或保修声明，不使用未经证实的奖项和认证。'},
   { id:'a-material',slot:'A+',title:'A+ 材质 / 成分故事',goal:'解释产品价值',prompt:'创建 Amazon A+ 材质故事模块。产品作为视觉中心，周围克制展示真实原材料、成分或生产工艺线索，采用编辑式静物摄影与自然柔光。画面清晰传达材料来源和制作质感，预留简短说明区域。',negative:'不展示配方中不存在的成分，不暗示医疗功效，不使用实验室画面制造伪科学印象，不生成冗长文字。'},
   { id:'a-process',slot:'A+',title:'A+ 使用步骤图',goal:'降低使用门槛',prompt:'创建 Amazon A+ 三步骤使用说明图。使用同一真实产品和一致场景，横向三格叙事，每格只表现一个清晰动作，人物手部与产品比例自然，预留 STEP 1/2/3 和短说明区域。光线、色调、镜头高度保持一致。',negative:'不省略关键安全步骤，不改变产品外观，不生成多余手指，不让步骤顺序含糊，不加入大段营销文案。'},
   { id:'season',slot:'营销',title:'Prime Day 活动场景',goal:'广告与促销素材',prompt:'创建面向 Amazon 活动广告的高级商品场景图。产品保持真实，置于深海军蓝与克制电光蓝的动态商业布景中，强视觉中心，留出促销标题安全区。画面高级、清晰、可用于 Sponsored Brands 或 Store 页面二次排版。',negative:'不直接生成 Amazon、Prime Day 商标或活动徽章，不生成价格和折扣，不添加未经授权的平台标识，不扭曲产品标签。'},
   { id:'video',slot:'视频',title:'7镜头视频分镜',goal:'主图视频脚本',prompt:'为 Amazon 商品视频创建 7 镜头视觉分镜：1 白底英雄镜头；2 使用痛点；3 产品登场；4 核心结构特写；5 真实使用；6 包装清单；7 品牌收束。每个镜头给出构图、镜头运动、光线和 3–5 秒动作，所有镜头保持同一 SKU 外观与品牌色。',negative:'不生成不可验证的承诺，不加入竞品商标，不设计危险用法，不使用过度特效掩盖产品，不让字幕超过安全区。'},
+  { id:'spec',slot:'补充',title:'规格参数版式',goal:'减少规格疑问',prompt:'创建 Amazon 规格参数说明图。以真实商品为中心，采用干净的工程化版式，围绕商品设计 5–6 个统一的图标与参数标签安全区；图片内不生成型号、数字、单位或说明文字，后续由系统填入已核验规格。背景简洁、对齐规整、适合移动端阅读。',negative:'不得猜测参数或单位，不生成乱码、伪数字或夸张性能图标，不使用未证实的认证和测试结论。'},
+  { id:'compatibility',slot:'补充',title:'适配 / 兼容说明图',goal:'降低错购与退货',prompt:'创建 Amazon 兼容性说明图。以商品和真实可兼容对象为主视觉，采用清晰的“适用 / 不适用”双区域布局，预留可编辑标签安全区。所有兼容关系必须来自输入资料；图内不生成型号或文字，后续由系统填入真实信息。',negative:'不声称未验证的兼容性，不使用第三方品牌 Logo，不画出未包含的转接件，不生成具体型号、乱码或伪文字。'},
+  { id:'variation',slot:'补充',title:'颜色与规格变体图',goal:'帮助准确选择',prompt:'创建 Amazon 颜色与规格变体选择图。将同一真实 SKU 的已提供变体整齐并列，保持拍摄角度、光线、比例和背景一致；每个变体下方预留统一名称标签安全区，图内不生成颜色名、尺寸或文字。突出差异但不混淆实际可售组合。',negative:'不增加不存在的颜色、尺寸、套装或图案，不混用不同 SKU 配件，不生成乱码、价格或促销标识。'},
+  { id:'install',slot:'补充',title:'安装与使用前提图',goal:'降低使用门槛',prompt:'创建 Amazon 安装或首次使用说明图。以 3–4 个连续画面展示真实准备、安装和检查动作，每一格预留步骤编号与短说明安全区，图内不生成文字。环境、工具和动作必须来自产品资料，商品主体始终清楚可见。',negative:'不省略安全前提，不设计危险操作，不增加未附带工具，不生成多余手指、乱码或错误步骤。'},
+  { id:'care',slot:'补充',title:'清洁维护说明图',goal:'建立长期信任',prompt:'创建 Amazon 清洁维护说明图。使用真实商品和安全、可验证的维护动作，设计 3 个简洁图标与说明安全区，留出后期文字位置。画面干净、克制、易理解，突出正确保养方式而非夸大效果。',negative:'不建议未验证的清洁剂或使用方法，不暗示永久耐用或医疗效果，不生成大段文字、乱码或危险动作。'},
+  { id:'gift',slot:'营销',title:'礼品与节日场景',goal:'节日转化素材',prompt:'创建适合 Amazon 广告与品牌店铺使用的礼品场景图。真实商品作为视觉焦点，融入克制、现代的节日氛围与礼赠情境，保留一块干净标题安全区。产品外观、包装和配件必须完全真实，画面可供后期排版。',negative:'不生成价格、折扣、平台商标、礼盒内不存在的配件或夸张节日文字，不改变产品标签。'},
+  { id:'store',slot:'营销',title:'品牌店铺首屏横幅',goal:'Store 首屏导流',badge:'横幅',prompt:'创建 Amazon Brand Store 首屏横幅。采用宽屏叙事构图，真实商品和目标使用场景形成清晰视觉焦点，左侧或右侧保留至少 35% 干净负空间作为后期标题、按钮和品牌文案安全区。色调统一、高级、自然。',negative:'图内不生成品牌名、口号、价格、按钮文字、外链或平台 Logo，不将产品裁切到无法辨识。'},
+  { id:'a-compare',slot:'A+',title:'A+ 真实参数对比模块',goal:'辅助理性决策',prompt:'创建 Amazon A+ 参数对比模块。用真实商品、简洁图标和 3–4 个横向对比行构成模块化版式，每一行均预留可编辑文字安全区；图片内不生成任何参数、数字或竞品名称，后续只填入可核验资料。',negative:'不攻击竞品，不使用竞品 Logo、伪数据、绝对化承诺、乱码或未经验证的性能结论。'},
+  { id:'a-scene',slot:'A+',title:'A+ 场景矩阵',goal:'扩展使用想象',prompt:'创建 Amazon A+ 场景矩阵。以同一真实商品串联 3 个不同但真实的使用情境，采用一致色调和镜头语言，每格留出短标题安全区。明确展示适用人群、空间或时机，但不改变产品结构与功能边界。',negative:'不生成不安全、违规或不适用的使用场景，不加入文字、品牌口号、虚假功效或不相关道具。'},
+  { id:'a-faq',slot:'A+',title:'A+ FAQ 与注意事项',goal:'降低购买顾虑',prompt:'创建 Amazon A+ FAQ 与注意事项模块背景。用真实产品局部、简洁问答图标和 4 个统一的可编辑文本安全区构成清晰版式，适合后期叠加已核验的问答和注意事项；整体克制、可信、容易扫读。',negative:'不生成具体问答文字、承诺、保修条款、医疗或安全认证，不产生乱码、伪文字或未验证结论。'},
+  { id:'electronics',slot:'品类',title:'3C 结构与接口拆解',goal:'解释技术卖点',prompt:'创建消费电子产品的 Amazon 结构与接口拆解图。真实产品为中心，使用精确引导线、接口轮廓和 4 个标签安全区；图内不生成端口名称、协议、功率或数字，后续只填入已核验的真实规格。采用干净科技感背景。',negative:'不发明接口、芯片、认证、续航或功率，不生成错误文字、数字、商标或内部结构。'},
+  { id:'home',slot:'品类',title:'家居收纳空间解决方案',goal:'展示空间价值',prompt:'创建家居与收纳品类 Amazon 场景图。展示真实商品在整洁、可实现的家庭空间中解决一个具体收纳或动线问题，产品比例准确、结构清楚；预留 2–3 个简短说明安全区，图内不生成文字。',negative:'不夸大容量，不改变安装方式或尺寸，不使用不真实豪宅场景、乱码、价格或夸张前后对比。'},
+  { id:'outdoor',slot:'品类',title:'户外耐用细节场景',goal:'证明户外适用性',prompt:'创建户外用品 Amazon 耐用细节场景图。让真实商品处于与其用途匹配的户外环境，结合一处材质或结构特写，留出可编辑说明安全区；光线真实、产品边界清楚，重点表现已核验的使用环境。',negative:'不暗示未验证的防水、防火、承重或极端耐候能力，不生成危险动作、伪认证、文字、数字或不属于套装的装备。'},
 ];
 
 const categories = ['家居厨房','家具家装','灯具照明','园艺庭院','清洁用品','美容个护','健康保健','消费电子','手机数码配件','电脑办公','户外运动','运动健身','玩具游戏','宠物用品','母婴用品','服饰箱包','鞋靴配饰','珠宝首饰','汽车用品','工具五金','工业与科研','办公文具','食品饮料','乐器影音','影视与摄影','节庆派对','礼品与收藏','其他品类'];
@@ -33,7 +46,7 @@ export default function Workbench({user}:{user:AppUser}) {
   const [selected,setSelected]=useState(promptLibrary[0]);
   const [prompt,setPrompt]=useState(promptLibrary[0].prompt+'\n\n负面约束：'+promptLibrary[0].negative);
   const [query,setQuery]=useState('');
-  const [libraryFilter,setLibraryFilter]=useState<'all'|'listing'|'aplus'|'video'|'campaign'>('all');
+  const [libraryFilter,setLibraryFilter]=useState<'all'|'listing'|'aplus'|'video'|'campaign'|'supplement'|'category'>('all');
   const [toast,setToast]=useState('');
   const [compliance,setCompliance]=useState(true);
   const [provider,setProvider]=useState<ImageProvider>('gemini');
@@ -46,7 +59,7 @@ export default function Workbench({user}:{user:AppUser}) {
   const [projectRows,setProjectRows]=useState<ProjectRow[]>([]);
   const [providers,setProviders]=useState<Record<ImageProvider,ProviderStatus>|null>(null);
   const [tasks,setTasks]=useState<GenerationTask[]>([]);
-  const filtered=useMemo(()=>promptLibrary.filter(p=>(p.title+p.goal+p.slot).toLowerCase().includes(query.toLowerCase())).filter(p=>libraryFilter==='all'||(libraryFilter==='listing'&&/^0[1-7]$/.test(p.slot))||(libraryFilter==='aplus'&&p.slot==='A+')||(libraryFilter==='video'&&p.slot==='视频')||(libraryFilter==='campaign'&&p.slot==='营销')),[query,libraryFilter]);
+  const filtered=useMemo(()=>promptLibrary.filter(p=>(p.title+p.goal+p.slot).toLowerCase().includes(query.toLowerCase())).filter(p=>libraryFilter==='all'||(libraryFilter==='listing'&&/^0[1-7]$/.test(p.slot))||(libraryFilter==='aplus'&&p.slot==='A+')||(libraryFilter==='video'&&p.slot==='视频')||(libraryFilter==='campaign'&&p.slot==='营销')||(libraryFilter==='supplement'&&p.slot==='补充')||(libraryFilter==='category'&&p.slot==='品类')),[query,libraryFilter]);
   useEffect(()=>{fetch('/api/projects').then(r=>r.ok?r.json():null).then(data=>{const payload=data as {projects?:ProjectRow[]}|null;const rows=payload?.projects??[];setProjectRows(rows);const requested=new URLSearchParams(window.location.search).get('project');const current=rows.find(p=>p.id===requested);if(current){setProjectId(current.id);setProjectTitle(current.title);setAsin(current.asin||'');notify('已载入项目，可继续生成素材')}}).catch(()=>setProjectRows([]))},[tasks]);
   useEffect(()=>{fetch('/api/providers').then(r=>r.ok?r.json():null).then(raw=>{const data=raw as Record<ImageProvider,ProviderStatus>|null;if(data){setProviders(data);if(!data.gemini.configured&&data.openai.configured)setProvider('openai')}}).catch(()=>setProviders(null))},[]);
   function notify(text:string){setToast(text);setTimeout(()=>setToast(''),1800)}
@@ -134,7 +147,7 @@ export default function Workbench({user}:{user:AppUser}) {
 
         <section className="library-card" id="prompt-library">
           <div className="library-head"><div><p>AMAZON PROMPT LIBRARY</p><h2>专业图片提示词库</h2><span>覆盖主图、次图、A+、视频与营销素材，可直接融入当前商品资料。</span></div><label>⌕<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索提示词用途…"/></label></div>
-          <div className="filter-row">{([{id:'all',label:'全部 12'},{id:'listing',label:'Listing 7图'},{id:'aplus',label:'A+ 内容'},{id:'video',label:'视频分镜'},{id:'campaign',label:'营销活动'}] as const).map(x=><button onClick={()=>setLibraryFilter(x.id)} className={libraryFilter===x.id?'active':''} key={x.id}>{x.label}</button>)}</div>
+          <div className="filter-row">{([{id:'all',label:`全部 ${promptLibrary.length}`},{id:'listing',label:'Listing 7图'},{id:'supplement',label:'补充图'},{id:'aplus',label:'A+ 内容'},{id:'campaign',label:'营销活动'},{id:'category',label:'品类专用'},{id:'video',label:'视频分镜'}] as const).map(x=><button onClick={()=>setLibraryFilter(x.id)} className={libraryFilter===x.id?'active':''} key={x.id}>{x.label}</button>)}</div>
           <div className="prompt-grid">{filtered.map(p=><article key={p.id}><div><span>{p.slot}</span>{p.badge&&<em>{p.badge}</em>}<button onClick={()=>navigator.clipboard.writeText(p.prompt).then(()=>notify('模板已复制'))}>复制</button></div><h3>{p.title}</h3><p>{p.prompt.slice(0,92)}…</p><footer><span>{p.goal}</span><button onClick={()=>applyPrompt(p)}>融入当前商品 ›</button></footer></article>)}</div>
         </section>
 
