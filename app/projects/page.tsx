@@ -21,7 +21,7 @@ export default async function ProjectsPage() {
       <div className="page-title"><div><p>PROJECT LIBRARY</p><h1>Listing 项目与素材</h1><span>原图与修改版本都会保留；当前采用版本会在素材上标明。</span></div><Link className="primary-link" href="/workbench">＋ 新建套图</Link></div>
       {projects.length ? <div className="project-gallery">{projects.map(project => {
         const items = assets.filter(asset => asset.projectId === project.id);
-        return <article key={project.id} className="project-item">
+        return <article key={project.id} id={`project-${project.id}`} className="project-item">
           <header><div><span>{project.market}</span><h2>{project.title}</h2><small>{project.asin || `项目 ${project.id.slice(0, 8)}`}</small></div><em>已生成 {project.imageCount} 张</em></header>
           <div className="asset-strip">{items.length ? items.map((asset, index) => <figure key={asset.id}>
             <a href={`/api/assets/${asset.id}`} target="_blank" rel="noreferrer"><img src={asset.thumbnailKey ? thumbnailUrl(asset.id, asset.thumbnailKey, user.id, asset.storageBackend) : `/api/assets/${asset.id}?thumb=1`} loading={index < 6 ? 'eager' : 'lazy'} fetchPriority={index < 2 ? 'high' : 'auto'} alt={`${project.title} ${asset.slot}`} /><span>{asset.versionNumber > 1 ? `V${asset.versionNumber}` : asset.slot}</span>{asset.isCurrent && asset.versionNumber > 1 && <i>当前</i>}</a>

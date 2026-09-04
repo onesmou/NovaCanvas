@@ -57,6 +57,7 @@ export default function Workbench({user}:{user:AppUser}) {
   const [asin,setAsin]=useState('');
   const [brand,setBrand]=useState('');
   const [projectRows,setProjectRows]=useState<ProjectRow[]>([]);
+  const [updatingProject,setUpdatingProject]=useState<string|null>(null);
   const [providers,setProviders]=useState<Record<ImageProvider,ProviderStatus>|null>(null);
   const [tasks,setTasks]=useState<GenerationTask[]>([]);
   const filtered=useMemo(()=>promptLibrary.filter(p=>(p.title+p.goal+p.slot).toLowerCase().includes(query.toLowerCase())).filter(p=>libraryFilter==='all'||(libraryFilter==='listing'&&/^0[1-7]$/.test(p.slot))||(libraryFilter==='aplus'&&p.slot==='A+')||(libraryFilter==='video'&&p.slot==='视频')||(libraryFilter==='campaign'&&p.slot==='营销')||(libraryFilter==='supplement'&&p.slot==='补充')||(libraryFilter==='category'&&p.slot==='品类')),[query,libraryFilter]);
@@ -65,6 +66,15 @@ export default function Workbench({user}:{user:AppUser}) {
   function notify(text:string){setToast(text);setTimeout(()=>setToast(''),1800)}
   function upload(e:ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];if(!f)return;if(f.size>10*1024*1024){notify('商品参考图不能超过 10MB');return;}const reader=new FileReader();reader.onload=()=>{setProductImage(String(reader.result));notify('商品参考图已上传，生成时将锁定外观')};reader.readAsDataURL(f)}
   function applyPrompt(p:PromptCard){setSelected(p);setPrompt(`${p.prompt}\n\n品类：${category}；站点：Amazon ${market}。\n负面约束：${p.negative}`);notify(`已载入「${p.title}」，商品资料会在生成时自动合并`)}
+  async function approveProject(id:string){
+    setUpdatingProject(id);
+    try{
+      const response=await fetch(`/api/projects/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'complete'})});
+      if(!response.ok){const data=await response.json() as {error?:string};throw new Error(data.error||'更新项目状态失败')}
+      setProjectRows(rows=>rows.map(project=>project.id===id?{...project,status:'complete'}:project));
+      notify('项目已确认，可继续在项目库查看和下载素材');
+    }catch(error){notify(error instanceof Error?error.message:'更新项目状态失败')}finally{setUpdatingProject(null)}
+  }
   async function generate(){
     if(!providers?.[provider]?.configured){notify(`${provider==='gemini'?'Nano Banana':'GPT Image'} 尚未配置 API 密钥`);return;}
     if(!projectTitle.trim()){notify('请先填写商品名称');return;}
@@ -89,7 +99,7 @@ export default function Workbench({user}:{user:AppUser}) {
       <nav aria-label="主导航">
         <p>生产中心</p>
         <Link className="active" href="/workbench"><span>▦</span>套图工作台</Link>
-        <a href="#prompt-library"><span>✦</span>提示词库<em>12</em></a>
+        <a href="#prompt-library"><span>✦</span>提示词库<em>{promptLibrary.length}</em></a>
         <Link href="/a-plus"><span>A+</span>A+ 内容画布</Link>
         <Link href="/compliance"><span>✓</span>合规检测</Link>
         <Link href="/projects"><span>▤</span>Listing 项目</Link>
@@ -137,7 +147,7 @@ export default function Workbench({user}:{user:AppUser}) {
 
           <div className="editor-card">
             <div className="card-heading"><div><span>03</span><h2>提示词编辑器</h2></div><button onClick={()=>navigator.clipboard.writeText(prompt).then(()=>notify('提示词已复制'))}>复制</button></div>
-            <div className="editor-meta"><span>{selected.slot}</span><div><b>{selected.title}</b><small>目标：{selected.goal}</small></div><label className="provider-select"><span>作图引擎</span><select value={provider} onChange={e=>setProvider(e.target.value as ImageProvider)}><option value="gemini" disabled={providers? !providers.gemini.configured:false}>Nano Banana{providers&&!providers.gemini.configured?'（未配置）':''}</option><option value="openai" disabled={providers? !providers.openai.configured:false}>GPT Image{providers&&!providers.openai.configured?'（未配置）':''}</option></select></label>{selected.badge&&<em>{selected.badge}</em>}</div>
+            <div className="editor-meta"><span>{selected.slot}</span><div className="editor-details"><b>{selected.title}</b><small>目标：{selected.goal}</small></div><label className="provider-select"><span>作图引擎</span><select value={provider} onChange={e=>setProvider(e.target.value as ImageProvider)}><option value="gemini" disabled={providers? !providers.gemini.configured:false}>Nano Banana{providers&&!providers.gemini.configured?'（未配置）':''}</option><option value="openai" disabled={providers? !providers.openai.configured:false}>GPT Image{providers&&!providers.openai.configured?'（未配置）':''}</option></select></label>{selected.badge&&<em>{selected.badge}</em>}</div>
             <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} aria-label="Amazon 图片提示词" />
             <div className="prompt-chips">{['锁定商品外观','移动端可读','真实商业摄影','英文文案','高分辨率'].map(x=><button key={x} onClick={()=>setPrompt(v=>v+`，${x}`)}>+ {x}</button>)}</div>
             <div className="editor-footer"><div><span>✦ 基础规则提示</span><small>请仅填写真实、可证明的卖点；生成后仍需人工复核。</small></div><button className="magic" onClick={generate} disabled={tasks.some(task=>task.slot===selected.slot&&task.state==='generating')}>{tasks.some(task=>task.slot===selected.slot&&task.state==='generating')?'此图生成中…':'✦ 生成这一张'}</button></div>
@@ -151,7 +161,7 @@ export default function Workbench({user}:{user:AppUser}) {
           <div className="prompt-grid">{filtered.map(p=><article key={p.id}><div><span>{p.slot}</span>{p.badge&&<em>{p.badge}</em>}<button onClick={()=>navigator.clipboard.writeText(p.prompt).then(()=>notify('模板已复制'))}>复制</button></div><h3>{p.title}</h3><p>{p.prompt.slice(0,92)}…</p><footer><span>{p.goal}</span><button onClick={()=>applyPrompt(p)}>融入当前商品 ›</button></footer></article>)}</div>
         </section>
 
-        <section className="project-card" id="listing-projects"><div className="project-head"><div><p>PROJECT PIPELINE</p><h2>真实项目记录</h2></div><Link href="/projects">查看全部项目 ›</Link></div><div className="project-table"><div><span>ASIN / SKU</span><span>商品</span><span>生成数量</span><span>状态</span><span>操作</span></div>{projectRows.length?projectRows.map((p,i)=>{const labels={draft:'草稿',generating:'生成中',review:'待审核',complete:'已完成'};const progress=Math.min(100,Math.max(8,p.imageCount*12));return <div key={p.id}><span><b>{p.asin||`项目 ${p.id.slice(0,6)}`}</b><small>Amazon US</small></span><span>{p.title}</span><span><i><u style={{width:`${progress}%`}}/></i><b>已生成 {p.imageCount} 张</b></span><span><em className={`status s${i%3}`}>{labels[p.status]}</em></span><span><button onClick={()=>{setProjectId(p.id);setProjectTitle(p.title);document.getElementById('product-info')?.scrollIntoView({behavior:'smooth',block:'start'});notify('已选择该项目，可持续追加或重做图片')}}>选择项目</button></span></div>}):<div className="empty-project"><span>尚无真实项目</span><span>上传商品图并生成第一张素材后，项目会自动出现在这里。</span></div>}</div></section>
+        <section className="project-card" id="listing-projects"><div className="project-head"><div><p>PROJECT PIPELINE</p><h2>真实项目记录</h2></div><Link href="/projects">查看全部项目 ›</Link></div><div className="project-table"><div><span>ASIN / SKU</span><span>商品</span><span>生成数量</span><span>状态</span><span>操作</span></div>{projectRows.length?projectRows.map(p=>{const labels={draft:'草稿',generating:'生成中',review:'待审核',complete:'已确认'};const progress=Math.min(100,Math.max(8,p.imageCount*12));return <div key={p.id}><span><b>{p.asin||`项目 ${p.id.slice(0,6)}`}</b><small>Amazon US</small></span><span>{p.title}</span><span><i><u style={{width:`${progress}%`}}/></i><b>已生成 {p.imageCount} 张</b></span><span className="project-status"><em className={`status status-${p.status}`}>{labels[p.status]}</em>{p.status==='review'&&<button className="approve-project" disabled={updatingProject===p.id} onClick={()=>approveProject(p.id)}>{updatingProject===p.id?'确认中…':'审核通过'}</button>}</span><span className="project-actions"><Link href={`/projects#project-${p.id}`}>查看项目</Link><button onClick={()=>{setProjectId(p.id);setProjectTitle(p.title);document.getElementById('product-info')?.scrollIntoView({behavior:'smooth',block:'start'});notify('已选择该项目，可持续追加或重做图片')}}>继续制作</button></span></div>}):<div className="empty-project"><span>尚无真实项目</span><span>上传商品图并生成第一张素材后，项目会自动出现在这里。</span></div>}</div></section>
       </div>
     </section>
     {toast&&<div className="toast"><span>✓</span>{toast}</div>}
