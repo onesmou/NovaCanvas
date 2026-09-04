@@ -95,7 +95,7 @@ export default function Workbench({user}:{user:AppUser}) {
 
       <div className="amazon-content">
         <section className="hero-row">
-          <div><p>AMAZON LISTING IMAGE SYSTEM</p><h1>从真实商品图，制作完整 Listing 素材</h1><span>按 7 图故事板逐张制作，商品资料自动合并到提示词，并留存到项目素材库。</span></div>
+          <div><p>AMAZON LISTING IMAGE SYSTEM</p><h1>从真实商品图，制作完整 Listing 素材</h1><span>以 7 图故事板为起点，支持同一项目持续追加、重做与保存多个版本。</span></div>
           <div className="compliance-score"><i>14</i><span><b>基础合规规则</b><small>供运营生成前核对</small></span><em>{compliance?'已开启':'未启用'}</em></div>
         </section>
 
@@ -115,7 +115,7 @@ export default function Workbench({user}:{user:AppUser}) {
 
         <section className="production-grid">
           <div className="storyboard-card">
-            <div className="card-heading"><div><span>02</span><h2>Amazon 7 图故事板</h2><em>已按转化顺序排列</em></div></div>
+            <div className="card-heading"><div><span>02</span><h2>Amazon 7 图故事板</h2><em>可无限追加版本</em></div></div>
             <div className="storyboard-grid">
               {promptLibrary.slice(0,7).map((p,i)=><button key={p.id} onClick={()=>applyPrompt(p)} className={selected.id===p.id?'selected':''}><div className={`board-art b${i}`}>{productImage&&<img src={productImage} alt=""/>}<span>{p.slot}</span><i>{i===0?'MAIN':i===2?'IN USE':i===5?'IN THE BOX':'IMAGE'}</i></div><b>{p.title}</b><small>{p.goal}</small><em>{selected.id===p.id?'正在编辑':'编辑提示词'}</em></button>)}
             </div>
@@ -138,7 +138,7 @@ export default function Workbench({user}:{user:AppUser}) {
           <div className="prompt-grid">{filtered.map(p=><article key={p.id}><div><span>{p.slot}</span>{p.badge&&<em>{p.badge}</em>}<button onClick={()=>navigator.clipboard.writeText(p.prompt).then(()=>notify('模板已复制'))}>复制</button></div><h3>{p.title}</h3><p>{p.prompt.slice(0,92)}…</p><footer><span>{p.goal}</span><button onClick={()=>applyPrompt(p)}>融入当前商品 ›</button></footer></article>)}</div>
         </section>
 
-        <section className="project-card" id="listing-projects"><div className="project-head"><div><p>PROJECT PIPELINE</p><h2>真实项目记录</h2></div><Link href="/projects">查看全部项目 ›</Link></div><div className="project-table"><div><span>ASIN / SKU</span><span>商品</span><span>套图进度</span><span>状态</span><span>操作</span></div>{projectRows.length?projectRows.map((p,i)=>{const labels={draft:'草稿',generating:'生成中',review:'待审核',complete:'已完成'};const progress=Math.min(100,p.imageCount*14);return <div key={p.id}><span><b>{p.asin||`项目 ${p.id.slice(0,6)}`}</b><small>Amazon US</small></span><span>{p.title}</span><span><i><u style={{width:`${progress}%`}}/></i><b>{p.imageCount}/7</b></span><span><em className={`status s${i%3}`}>{labels[p.status]}</em></span><span><button onClick={()=>{setProjectId(p.id);setProjectTitle(p.title);document.getElementById('product-info')?.scrollIntoView({behavior:'smooth',block:'start'});notify('已选择该项目，可在商品资料继续新建图片')}}>选择项目</button></span></div>}):<div className="empty-project"><span>尚无真实项目</span><span>上传商品图并生成第一张素材后，项目会自动出现在这里。</span></div>}</div></section>
+        <section className="project-card" id="listing-projects"><div className="project-head"><div><p>PROJECT PIPELINE</p><h2>真实项目记录</h2></div><Link href="/projects">查看全部项目 ›</Link></div><div className="project-table"><div><span>ASIN / SKU</span><span>商品</span><span>生成数量</span><span>状态</span><span>操作</span></div>{projectRows.length?projectRows.map((p,i)=>{const labels={draft:'草稿',generating:'生成中',review:'待审核',complete:'已完成'};const progress=Math.min(100,Math.max(8,p.imageCount*12));return <div key={p.id}><span><b>{p.asin||`项目 ${p.id.slice(0,6)}`}</b><small>Amazon US</small></span><span>{p.title}</span><span><i><u style={{width:`${progress}%`}}/></i><b>已生成 {p.imageCount} 张</b></span><span><em className={`status s${i%3}`}>{labels[p.status]}</em></span><span><button onClick={()=>{setProjectId(p.id);setProjectTitle(p.title);document.getElementById('product-info')?.scrollIntoView({behavior:'smooth',block:'start'});notify('已选择该项目，可持续追加或重做图片')}}>选择项目</button></span></div>}):<div className="empty-project"><span>尚无真实项目</span><span>上传商品图并生成第一张素材后，项目会自动出现在这里。</span></div>}</div></section>
       </div>
     </section>
     {toast&&<div className="toast"><span>✓</span>{toast}</div>}

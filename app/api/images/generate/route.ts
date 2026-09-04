@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { saveThumbnail } from '../../../../lib/image-storage';
 import { getProviderByKey, ProviderConfig } from '../../../../lib/provider-config';
+import { changeCredits, reserveCredits } from '../../../../lib/credits';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../lib/selfhost-auth';
 import { db, ensureSelfHostedSchema } from '../../../../lib/selfhost-db';
@@ -63,10 +64,9 @@ export async function POST(request:NextRequest){
   let body:Body;try{body=await request.json() as Body;}catch{return NextResponse.json({error:'请求格式不正确'},{status:400});}
   const prompt=body.prompt?.trim();if(!prompt)return NextResponse.json({error:'提示词不能为空'},{status:400});if(prompt.length>12_000)return NextResponse.json({error:'提示词过长，请控制在 12000 字以内'},{status:400});if(!body.projectTitle?.trim())return NextResponse.json({error:'请填写商品名称'},{status:400});if(!body.referenceImage)return NextResponse.json({error:'请先上传真实商品参考图，才能生成商品素材'},{status:400});
   const provider:Provider=body.provider==='openai'?'openai':'gemini';const config=await getProviderByKey(provider);const creditCost=config?.creditCost??(provider==='openai'?10:6);
-  if(user.credits<creditCost)return NextResponse.json({error:`算力不足，本次需要 ${creditCost} 点，当前剩余 ${user.credits} 点`},{status:402});
   await ensureSelfHostedSchema();
-  const reserved=await db()<Array<{credits:number}>>`UPDATE app_users SET credits=credits-${creditCost} WHERE id=${user.id} AND credits>=${creditCost} RETURNING credits`;
-  if(!reserved[0])return NextResponse.json({error:'算力余额发生变化，请刷新后重试'},{status:409});
+  const remaining=await reserveCredits({userId:user.id,amount:creditCost,type:'generation_reserve',actorId:user.id,note:`生成图片：${config?.name||provider}`});
+  if(remaining===null)return NextResponse.json({error:`算力不足，本次需要 ${creditCost} 点，当前剩余 ${user.credits} 点`},{status:402});
   try{
     const generated=provider==='openai'?await generateWithOpenAI({...body,prompt},config):await generateWithGemini({...body,prompt},config);
     let projectId=body.projectId||null;
@@ -76,6 +76,6 @@ export async function POST(request:NextRequest){
     const dataDir=process.env.ASSET_DATA_DIR||path.join(process.cwd(),'data');const image=Buffer.from(generated.base64,'base64');await mkdir(path.join(dataDir,'assets'),{recursive:true});await writeFile(path.join(dataDir,'assets',storageKey),image,{mode:0o600});const thumbnailKey=await saveThumbnail(assetId,image);
     await db()`INSERT INTO generated_assets(id,owner_id,project_id,provider,model,slot,prompt,storage_key,mime_type,credit_cost,root_asset_id,version_number,is_current,thumbnail_key) VALUES(${assetId},${user.id},${projectId},${provider},${generated.model},${body.slot||'IMAGE'},${prompt},${storageKey},${generated.mimeType},${creditCost},${assetId},1,true,${thumbnailKey})`;
     await db()`UPDATE projects SET image_count=image_count+1,status='review',updated_at=now() WHERE id=${projectId}`;
-    return NextResponse.json({imageUrl:`/api/assets/${assetId}`,assetId,projectId,creditsRemaining:reserved[0].credits,provider:provider==='openai'?'GPT Image 2':'Nano Banana 2'});
-  }catch(error){await db()`UPDATE app_users SET credits=credits+${creditCost} WHERE id=${user.id}`;console.error('NovaCanvas image generation failed',error);return NextResponse.json({error:error instanceof Error?error.message:'图片生成失败'},{status:503});}
+    return NextResponse.json({imageUrl:`/api/assets/${assetId}`,assetId,projectId,creditsRemaining:remaining,provider:provider==='openai'?'GPT Image 2':'Nano Banana 2'});
+  }catch(error){await changeCredits({userId:user.id,delta:creditCost,type:'generation_refund',actorId:user.id,note:`生成失败返还：${config?.name||provider}`}).catch(refundError=>console.error('NovaCanvas generation refund failed',refundError));console.error('NovaCanvas image generation failed',error);return NextResponse.json({error:error instanceof Error?error.message:'图片生成失败'},{status:503});}
 }

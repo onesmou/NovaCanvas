@@ -26,6 +26,8 @@ async function initializeSchema() {
   await sql`CREATE INDEX IF NOT EXISTS idx_generated_assets_project_created ON generated_assets(project_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_generated_assets_root_version ON generated_assets(root_asset_id, version_number DESC)`;
   await sql`CREATE TABLE IF NOT EXISTS image_provider_configs (id uuid PRIMARY KEY, key text UNIQUE NOT NULL, name text NOT NULL, adapter text NOT NULL, base_url text NOT NULL, api_key_ciphertext text NOT NULL, model text NOT NULL, credit_cost integer NOT NULL DEFAULT 6, enabled boolean NOT NULL DEFAULT false, supports_edit boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now())`;
+  await sql`CREATE TABLE IF NOT EXISTS credit_transactions (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE, actor_id uuid REFERENCES app_users(id) ON DELETE SET NULL, asset_id uuid REFERENCES generated_assets(id) ON DELETE SET NULL, type text NOT NULL, delta integer NOT NULL, balance_after integer NOT NULL CHECK (balance_after>=0), note text, created_at timestamptz NOT NULL DEFAULT now())`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_created ON credit_transactions(user_id,created_at DESC)`;
 }
 
 export async function ensureSelfHostedSchema() {

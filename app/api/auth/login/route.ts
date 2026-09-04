@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSession, login, provisionBootstrapOwner } from '../../../../lib/selfhost-auth';
+import { externalAppOrigin } from '../../../../lib/external-url';
 export const runtime = 'nodejs';
-function appBase(request:NextRequest){
-  const configured=process.env.APP_URL?.trim();
-  if(configured){try{return new URL(configured).origin}catch{console.error('Invalid APP_URL configuration')}}
-  return request.nextUrl.origin;
-}
 export async function POST(request:NextRequest){
   const form=await request.formData();
   const email=String(form.get('email')||'').trim();
   const password=String(form.get('password')||'');
   const next=String(form.get('next')||'/workbench');
   const safeNext=next.startsWith('/')&&!next.startsWith('//')?next:'/workbench';
-  const base=appBase(request);
+  const base=externalAppOrigin(request);
   try{
     const authenticated=await login(email,password);
     if(authenticated)return NextResponse.redirect(new URL(safeNext,base),303);
