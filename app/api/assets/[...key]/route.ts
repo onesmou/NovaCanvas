@@ -1,9 +1,8 @@
-import { readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../lib/selfhost-auth';
 import { db, ensureSelfHostedSchema } from '../../../../lib/selfhost-db';
-import { assetDirectory } from '../../../../lib/image-storage';
+import { assetCdnUrl, readAsset, readThumbnail, removeAsset, removeThumbnail } from '../../../../lib/image-storage';
 
 export const runtime = 'nodejs';
 
@@ -14,21 +13,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const id = key?.[0];
   if (!id) return NextResponse.json({ error: '素材不存在' }, { status: 404 });
   await ensureSelfHostedSchema();
-  const rows = await db()<Array<{ storageKey: string; thumbnailKey: string | null; mimeType: string }>>`
-    SELECT storage_key AS "storageKey",thumbnail_key AS "thumbnailKey",mime_type AS "mimeType"
+  const rows = await db()<Array<{ storageKey: string; thumbnailKey: string | null; mimeType: string; storageBackend:string }>>`
+    SELECT storage_key AS "storageKey",thumbnail_key AS "thumbnailKey",mime_type AS "mimeType",storage_backend AS "storageBackend"
     FROM generated_assets WHERE id=${id} AND (owner_id=${user.id} OR ${user.role} IN ('owner','admin')) LIMIT 1`;
   const asset = rows[0];
   if (!asset) return NextResponse.json({ error: '素材不存在或无权访问' }, { status: 404 });
   const safeName = path.basename(asset.storageKey);
   if (safeName !== asset.storageKey) return NextResponse.json({ error: '素材路径无效' }, { status: 400 });
   try {
-    const dataDir = assetDirectory();
     const download = request.nextUrl.searchParams.get('download') === '1';
     const useThumbnail = request.nextUrl.searchParams.get('thumb') === '1' && !download && asset.thumbnailKey;
     const fileName = useThumbnail ? path.basename(asset.thumbnailKey!) : safeName;
-    const folder = useThumbnail ? 'thumbs' : 'assets';
-    const data = await readFile(path.join(dataDir, folder, fileName));
-    return new NextResponse(data, { headers: { 'Content-Type': useThumbnail ? 'image/webp' : asset.mimeType, 'Cache-Control': 'private, max-age=31536000, immutable', 'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="${safeName}"` } });
+    if(!download&&!useThumbnail&&asset.storageBackend==='cos'){const cdnUrl=assetCdnUrl(fileName);if(cdnUrl)return NextResponse.redirect(cdnUrl,302);}
+    const data = useThumbnail ? await readThumbnail(fileName) : await readAsset(fileName);
+    return new NextResponse(new Uint8Array(data), { headers: { 'Content-Type': useThumbnail ? 'image/webp' : asset.mimeType, 'Cache-Control': 'private, max-age=31536000, immutable', 'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="${safeName}"` } });
   } catch { return NextResponse.json({ error: '素材文件暂时不可用' }, { status: 404 }); }
 }
 
@@ -57,10 +55,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   await db()`UPDATE projects SET image_count=GREATEST(0,image_count-${targets.length}),updated_at=now() WHERE id=${asset.projectId}`;
   const [remaining] = await db()<Array<{ count: number }>>`SELECT count(*)::int AS count FROM generated_assets WHERE project_id=${asset.projectId}`;
   if (remaining?.count === 0) await db()`DELETE FROM projects WHERE id=${asset.projectId}`;
-  const dataDir = assetDirectory();
   await Promise.all(targets.flatMap(item => [
-    unlink(path.join(dataDir, 'assets', path.basename(item.storageKey))).catch(() => undefined),
-    item.thumbnailKey ? unlink(path.join(dataDir, 'thumbs', path.basename(item.thumbnailKey))).catch(() => undefined) : Promise.resolve(),
+    removeAsset(path.basename(item.storageKey)).catch(() => undefined),
+    item.thumbnailKey ? removeThumbnail(path.basename(item.thumbnailKey)).catch(() => undefined) : Promise.resolve(),
   ]));
   return NextResponse.json({ ok: true, deleted: targets.length });
 }

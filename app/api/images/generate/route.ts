@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { saveThumbnail } from '../../../../lib/image-storage';
+import { saveAsset, saveThumbnail, usingCos } from '../../../../lib/image-storage';
 import { getProviderByKey, ProviderConfig } from '../../../../lib/provider-config';
 import { changeCredits, reserveCredits } from '../../../../lib/credits';
 import { NextRequest, NextResponse } from 'next/server';
@@ -73,8 +71,8 @@ export async function POST(request:NextRequest){
     if(projectId){const owned=await db()<Array<{id:string}>>`SELECT id FROM projects WHERE id=${projectId} AND owner_id=${user.id} LIMIT 1`;if(!owned[0])projectId=null;}
     if(!projectId){projectId=randomUUID();await db()`INSERT INTO projects(id,owner_id,asin,title,category,market,status) VALUES(${projectId},${user.id},${body.asin||null},${body.projectTitle?.trim()||'未命名 Amazon 项目'},${body.category||'Amazon'},${body.market||'Amazon US'},'review')`;}
     const assetId=randomUUID();const extension=generated.mimeType.includes('jpeg')?'jpg':generated.mimeType.includes('webp')?'webp':'png';const storageKey=`${assetId}.${extension}`;
-    const dataDir=process.env.ASSET_DATA_DIR||path.join(process.cwd(),'data');const image=Buffer.from(generated.base64,'base64');await mkdir(path.join(dataDir,'assets'),{recursive:true});await writeFile(path.join(dataDir,'assets',storageKey),image,{mode:0o600});const thumbnailKey=await saveThumbnail(assetId,image);
-    await db()`INSERT INTO generated_assets(id,owner_id,project_id,provider,model,slot,prompt,storage_key,mime_type,credit_cost,root_asset_id,version_number,is_current,thumbnail_key) VALUES(${assetId},${user.id},${projectId},${provider},${generated.model},${body.slot||'IMAGE'},${prompt},${storageKey},${generated.mimeType},${creditCost},${assetId},1,true,${thumbnailKey})`;
+    const image=Buffer.from(generated.base64,'base64');await saveAsset(storageKey,image,generated.mimeType);const thumbnailKey=await saveThumbnail(assetId,image);
+    await db()`INSERT INTO generated_assets(id,owner_id,project_id,provider,model,slot,prompt,storage_key,mime_type,credit_cost,root_asset_id,version_number,is_current,thumbnail_key,storage_backend) VALUES(${assetId},${user.id},${projectId},${provider},${generated.model},${body.slot||'IMAGE'},${prompt},${storageKey},${generated.mimeType},${creditCost},${assetId},1,true,${thumbnailKey},${usingCos()?'cos':'local'})`;
     await db()`UPDATE projects SET image_count=image_count+1,status='review',updated_at=now() WHERE id=${projectId}`;
     return NextResponse.json({imageUrl:`/api/assets/${assetId}`,assetId,projectId,creditsRemaining:remaining,provider:provider==='openai'?'GPT Image 2':'Nano Banana 2'});
   }catch(error){await changeCredits({userId:user.id,delta:creditCost,type:'generation_refund',actorId:user.id,note:`生成失败返还：${config?.name||provider}`}).catch(refundError=>console.error('NovaCanvas generation refund failed',refundError));console.error('NovaCanvas image generation failed',error);return NextResponse.json({error:error instanceof Error?error.message:'图片生成失败'},{status:503});}

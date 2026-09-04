@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { thumbnailCdnUrl } from './image-storage';
 
 const DAY = 86_400;
 const secret = process.env.ASSET_URL_SECRET || process.env.DATABASE_URL || 'novacanvas-thumbnail-secret';
@@ -7,7 +8,9 @@ function signature(assetId: string, thumbnailKey: string, ownerId: string, expir
   return createHmac('sha256', secret).update(`${assetId}|${thumbnailKey}|${ownerId}|${expires}`).digest('base64url');
 }
 
-export function thumbnailUrl(assetId: string, thumbnailKey: string, ownerId: string) {
+export function thumbnailUrl(assetId: string, thumbnailKey: string, ownerId: string, storageBackend='local') {
+  const cdnUrl=storageBackend==='cos'?thumbnailCdnUrl(thumbnailKey):null;
+  if(cdnUrl)return cdnUrl;
   const expires = (Math.floor(Date.now() / 1000 / DAY) + 2) * DAY;
   const token = signature(assetId, thumbnailKey, ownerId, expires);
   return `/api/thumbnails/${assetId}?k=${encodeURIComponent(thumbnailKey)}&o=${ownerId}&e=${expires}&s=${token}`;

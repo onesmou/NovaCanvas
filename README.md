@@ -79,7 +79,7 @@ flowchart TB
 | --- | --- |
 | Web 应用 | Next.js、React、TypeScript |
 | 数据库 | PostgreSQL、Drizzle ORM |
-| 图片存储 | 私有本地存储；原图 + WebP 缩略图 |
+| 图片存储 | 本地存储或腾讯云 COS；原图 + WebP 缩略图，缩略图可经 CDN 加速 |
 | 图像服务 | OpenAI Images 兼容接口、Gemini 图像接口及可配置中转服务 |
 | 部署 | Docker Compose 或宝塔 Node 项目 |
 
@@ -129,6 +129,27 @@ NovaCanvas 不会把第三方密钥发送到普通用户浏览器。总管理员
 - 保存时连通性测试
 
 不同服务商对于尺寸、编辑能力和结果格式的支持有所不同。请以服务商的官方文档和实际测试为准，并在上线前为每个引擎完成一次生成与局部编辑验证。
+
+## 腾讯云 COS + CDN（可选）
+
+默认使用本地 `ASSET_DATA_DIR`，不影响开发和已有部署。若图片量较大，可将**新生成的图片**写入私有 COS，并让项目列表的 WebP 缩略图直接经 CDN 加速。
+
+1. 在 COS 创建私有存储桶，并建立 `originals/`、`thumbnails/` 前缀；CDN 源站授权使用该存储桶。
+2. 为服务端创建最小权限 CAM 子账号；不要将密钥放入浏览器、代码或 Git。
+3. 在服务器 `.env`（不是 `.env.example`）填写：
+
+```dotenv
+STORAGE_DRIVER=cos
+COS_REGION=ap-your-region
+COS_BUCKET=your-bucket-appid
+COS_SECRET_ID=your-server-only-secret-id
+COS_SECRET_KEY=your-server-only-secret-key
+COS_CDN_DOMAIN=https://assets.example.com
+COS_CDN_AUTH_KEY=your-type-d-auth-key
+```
+
+4. CDN 使用 Type D 鉴权时，NovaCanvas 会在服务端生成 `sign` 和 `t` 参数；鉴权密钥不会发送给浏览器。腾讯云说明见 [Type D 鉴权文档](https://cloud.tencent.com/document/product/228/41625)。
+5. 更新服务后生成一张测试图：项目列表的缩略图应来自 CDN，编辑、下载和删除仍通过应用权限校验。启用 COS 前的历史素材会继续从服务器本地读取；可在验证后另行迁移。
 
 ## 安全与数据边界
 

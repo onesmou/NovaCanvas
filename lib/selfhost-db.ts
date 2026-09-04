@@ -22,6 +22,7 @@ async function initializeSchema() {
   await sql`ALTER TABLE generated_assets ADD COLUMN IF NOT EXISTS is_current boolean NOT NULL DEFAULT true`;
   await sql`ALTER TABLE generated_assets ADD COLUMN IF NOT EXISTS edit_metadata jsonb`;
   await sql`ALTER TABLE generated_assets ADD COLUMN IF NOT EXISTS thumbnail_key text`;
+  await sql`ALTER TABLE generated_assets ADD COLUMN IF NOT EXISTS storage_backend text NOT NULL DEFAULT 'local'`;
   await sql`UPDATE generated_assets SET root_asset_id=id WHERE root_asset_id IS NULL`;
   await sql`CREATE INDEX IF NOT EXISTS idx_generated_assets_project_created ON generated_assets(project_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_generated_assets_root_version ON generated_assets(root_asset_id, version_number DESC)`;
