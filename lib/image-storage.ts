@@ -34,16 +34,22 @@ function cosClient(){
 
 function objectKey(area:StorageArea,fileName:string){return `${area==='assets'?'originals':'thumbnails'}/${safeName(fileName)}`;}
 
-async function writeStored(area:StorageArea,fileName:string,contents:Buffer,contentType:string){
+async function writeLocal(area:StorageArea,fileName:string,contents:Buffer){
   const name=safeName(fileName);
-  if(!usingCos()){
-    const dir=path.join(assetDirectory(),area);
-    await mkdir(dir,{recursive:true});
-    await writeFile(path.join(dir,name),contents,{mode:0o600});
-    return;
-  }
+  const dir=path.join(assetDirectory(),area);
+  await mkdir(dir,{recursive:true});
+  await writeFile(path.join(dir,name),contents,{mode:0o600});
+}
+
+async function writeCos(area:StorageArea,fileName:string,contents:Buffer,contentType:string){
+  const name=safeName(fileName);
   const {config,client}=cosClient();
   await client.putObject({Bucket:config.bucket,Region:config.region,Key:objectKey(area,name),Body:contents,ContentType:contentType,CacheControl:area==='thumbs'?'public, max-age=31536000, immutable':'private, max-age=0, no-store'});
+}
+
+async function writeStored(area:StorageArea,fileName:string,contents:Buffer,contentType:string){
+  if(!usingCos())return writeLocal(area,fileName,contents);
+  return writeCos(area,fileName,contents,contentType);
 }
 
 async function readStored(area:StorageArea,fileName:string){
@@ -87,6 +93,30 @@ export async function saveThumbnail(assetId:string,source:Buffer){
   const thumbnail=await sharp(source,{limitInputPixels:80_000_000}).rotate().resize({width:480,height:480,fit:'inside',withoutEnlargement:true}).webp({quality:76}).toBuffer();
   await writeStored('thumbs',key,thumbnail,'image/webp');
   return key;
+}
+
+/**
+ * 写入原图与缩略图时以“成对成功”为准：COS 任一写入失败时保留本地副本，
+ * 让生成结果继续可见，避免因对象存储短暂异常让用户丢失一张已经生成的图片。
+ */
+export async function saveGeneratedAsset(assetId:string,storageKey:string,source:Buffer,mimeType:string){
+  const thumbnailKey=`${assetId}.webp`;
+  const thumbnail=await sharp(source,{limitInputPixels:80_000_000}).rotate().resize({width:480,height:480,fit:'inside',withoutEnlargement:true}).webp({quality:76}).toBuffer();
+  if(usingCos()){
+    try{
+      await writeCos('assets',storageKey,source,mimeType);
+      await writeCos('thumbs',thumbnailKey,thumbnail,'image/webp');
+      // COS/CDN 可用时仍保留本地热备，便于编辑、下载回退和故障恢复。
+      await Promise.all([writeLocal('assets',storageKey,source),writeLocal('thumbs',thumbnailKey,thumbnail)]);
+      return {thumbnailKey,storageBackend:'cos' as const};
+    }catch(error){
+      console.error('NovaCanvas COS upload failed; keeping generated asset locally',error);
+      await Promise.all([writeLocal('assets',storageKey,source),writeLocal('thumbs',thumbnailKey,thumbnail)]);
+      return {thumbnailKey,storageBackend:'local' as const};
+    }
+  }
+  await Promise.all([writeLocal('assets',storageKey,source),writeLocal('thumbs',thumbnailKey,thumbnail)]);
+  return {thumbnailKey,storageBackend:'local' as const};
 }
 
 function cdnUrl(area:StorageArea,fileName:string){
